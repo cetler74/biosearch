@@ -1,0 +1,144 @@
+# Nail Salon Directory Website Design Plan
+
+## Project Overview
+Create a mobile-friendly nail salon directory website with search functionality, salon details, services, pricing, map integration, and booking capabilities, based on the Bio Sculpture salon finder reference.
+
+## Data Structure Analysis
+The Excel file contains 1,196 salon records with the following key fields:
+- **Código**: Unique salon ID
+- **Nome**: Salon name
+- **País**: Country
+- **Telefone**: Phone number
+- **Email**: Email address
+- **Website**: Website URL
+- **Address fields**: País Morada, Região, Cidade, Rua, Porta, Cod-Postal
+- **Estado**: Status (Active/Inactive)
+
+## Website Features
+
+### Core Features
+1. **Search & Filter System**
+   - Location-based search (by city, region, postal code)
+   - Text search by salon name
+   - Filter by services offered
+   - Filter by availability
+
+2. **Salon Listings**
+   - Card-based layout showing salon information
+   - Contact details (phone, email, website)
+   - Address and location
+   - Services offered
+   - Pricing information
+   - Customer ratings/reviews
+
+3. **Map Integration**
+   - Interactive map showing salon locations
+   - Clickable markers with salon details
+   - Zoom and pan functionality
+   - Mobile-friendly touch controls
+
+4. **Salon Detail Pages**
+   - Complete salon information
+   - Photo gallery
+   - Services and pricing
+   - Contact information
+   - Booking interface
+   - Customer reviews
+
+5. **Booking System**
+   - Service selection
+   - Date and time picker
+   - Customer information form
+   - Confirmation system
+
+### Technical Requirements
+
+#### Frontend (React)
+- Responsive design for mobile and desktop
+- Modern UI with smooth animations
+- Interactive map component
+- Search and filter components
+- Booking form components
+
+#### Backend (Flask)
+- RESTful API for salon data
+- Search and filtering endpoints
+- Booking management
+- Data validation
+- CORS support for frontend integration
+
+#### Database
+- Convert Excel data to structured format
+- Add mock services and pricing data
+- Include coordinates for map integration
+
+## Design Principles
+
+### Visual Design
+- Clean, modern interface
+- Professional color scheme
+- High contrast for accessibility
+- Consistent typography
+- Mobile-first approach
+
+### User Experience
+- Intuitive navigation
+- Fast search results
+- Easy booking process
+- Clear information hierarchy
+- Touch-friendly interface
+
+### Performance
+- Fast loading times
+- Optimized images
+- Efficient data fetching
+- Responsive interactions
+
+## Color Scheme
+- Primary: #2C3E50 (Dark blue-gray)
+- Secondary: #E74C3C (Red accent)
+- Background: #F8F9FA (Light gray)
+- Text: #2C3E50 (Dark)
+- Success: #27AE60 (Green)
+- Warning: #F39C12 (Orange)
+
+## Typography
+- Headings: Inter, sans-serif
+- Body text: Inter, sans-serif
+- Font sizes: 16px base, responsive scaling
+
+## Layout Structure
+
+### Header
+- Logo/Brand name
+- Search bar
+- Navigation menu
+- Mobile hamburger menu
+
+### Main Content Area
+- Search filters sidebar (desktop) / collapsible (mobile)
+- Salon listings grid/list
+- Map view toggle
+- Pagination
+
+### Footer
+- Contact information
+- Links
+- Social media
+- Copyright
+
+## Mobile Responsiveness
+- Breakpoints: 320px, 768px, 1024px, 1200px
+- Touch-friendly buttons (minimum 44px)
+- Swipe gestures for map and galleries
+- Optimized forms for mobile input
+- Fast loading on mobile networks
+
+## Next Steps
+1. Create wireframes and mockups
+2. Set up React project structure
+3. Implement Flask backend
+4. Integrate map functionality
+5. Add booking system
+6. Test and deploy
+
