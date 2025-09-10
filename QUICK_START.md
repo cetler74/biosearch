@@ -1,5 +1,22 @@
 # 🚀 BioSearch - Quick Start Guide
 
+## 🚀 **QUICK START COMMANDS**
+
+### **Start Both Servers (Recommended)**
+```bash
+# Terminal 1 - Backend
+source venv/bin/activate && cd backend && python3 app.py
+
+# Terminal 2 - Frontend  
+cd frontend && npm run dev
+```
+
+### **Access Your Application**
+- **Website**: http://localhost:5173
+- **API**: http://localhost:5001/api/health
+
+---
+
 ## 📋 **SETUP INSTRUCTIONS**
 
 ### **Prerequisites**
@@ -35,9 +52,8 @@ ls -la ~/biosearch.db
 
 ### **3. Start Backend Server**
 ```bash
-# From the backend directory
-cd backend
-python app.py
+# From the project root directory
+source venv/bin/activate && cd backend && python3 app.py
 ```
 **Backend will start on:** http://localhost:5001
 
@@ -82,7 +98,8 @@ Both servers are currently **live and operational**:
 Navigate to: **http://localhost:5173**
 
 You'll see the beautiful BioSearch homepage with:
-- Clean, BookSolo-inspired design
+- Clean, Bio Sculpture-inspired design
+- Professional nail technician background
 - Search functionality
 - BIO Diamond service highlighting
 - Mobile-responsive layout
@@ -145,7 +162,7 @@ curl http://localhost:5001/api/salons/1
 ✅ **Advanced Search & Filtering** - By name, location, services  
 ✅ **BIO Diamond Integration** - Premium service highlighting  
 ✅ **Mobile-Responsive Design** - Works on all devices  
-✅ **Professional UI/UX** - BookSolo-inspired clean design  
+✅ **Professional UI/UX** - Bio Sculpture-inspired clean design  
 ✅ **Real-time API** - Fast, responsive backend  
 ✅ **Service Listings** - Complete with pricing and duration  
 
@@ -161,8 +178,8 @@ lsof -i :5001
 # Kill any existing processes
 pkill -f "python app.py"
 
-# Restart backend
-cd backend && python app.py
+# Restart backend (from project root)
+source venv/bin/activate && cd backend && python3 app.py
 ```
 
 #### **Frontend Won't Start**
@@ -201,7 +218,7 @@ To access from other devices on your network:
 ✅ **Advanced Search & Filtering** - By name, location, services  
 ✅ **BIO Diamond Integration** - Premium service highlighting  
 ✅ **Mobile-Responsive Design** - Works on all devices  
-✅ **Professional UI/UX** - BookSolo-inspired clean design  
+✅ **Professional UI/UX** - Bio Sculpture-inspired clean design  
 ✅ **Real-time API** - Fast, responsive backend  
 ✅ **Service Listings** - Complete with pricing and duration  
 ✅ **Booking System** - Full appointment booking with time slots  
