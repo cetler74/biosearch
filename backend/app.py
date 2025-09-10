@@ -128,9 +128,10 @@ class Salon(db.Model):
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    booking_enabled = db.Column(db.Boolean, default=True)
+    booking_enabled = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     is_bio_diamond = db.Column(db.Boolean, default=False)
+    about = db.Column(db.Text)
     
     # Relationships
     owner = db.relationship('User', back_populates='salons')
@@ -189,7 +190,7 @@ class Booking(db.Model):
     booking_date = db.Column(db.Date, nullable=False)
     booking_time = db.Column(db.Time, nullable=False)
     duration = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='confirmed')
+    status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -203,6 +204,7 @@ class User(db.Model):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     name = db.Column(db.String(100), nullable=False)
+    customer_id = db.Column(db.String(50), nullable=True)
     auth_token = db.Column(db.String(200), unique=True)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
@@ -242,20 +244,30 @@ class Review(db.Model):
 def register():
     data = request.get_json()
     
-    required_fields = ['email', 'password', 'name']
+    required_fields = ['email', 'password', 'name', 'customer_id']
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
     
+    # Validate customer ID
+    from customer_validation import is_valid_customer_id
+    if not is_valid_customer_id(data['customer_id']):
+        return jsonify({'error': 'Only valid Bio Sculpture customers can signup'}), 400
+    
     # Check if user already exists
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'error': 'User already exists'}), 400
+    
+    # Check if customer ID is already used
+    if User.query.filter_by(customer_id=data['customer_id']).first():
+        return jsonify({'error': 'This customer ID is already registered'}), 400
     
     # Create new user
     user = User(
         email=data['email'],
         password_hash=hash_password(data['password']),
         name=data['name'],
+        customer_id=data['customer_id'],
         auth_token=secrets.token_hex(32)
     )
     
@@ -266,6 +278,7 @@ def register():
         'id': user.id,
         'email': user.email,
         'name': user.name,
+        'customer_id': user.customer_id,
         'token': user.auth_token
     }), 201
 
@@ -360,6 +373,7 @@ def get_salons():
             'longitude': salon.longitude,
             'booking_enabled': salon.booking_enabled,
             'is_bio_diamond': salon.is_bio_diamond,
+            'about': salon.about,
             'reviews': reviews
         })
     
@@ -413,6 +427,7 @@ def get_salon(salon_id):
         'longitude': salon.longitude,
         'booking_enabled': salon.booking_enabled,
         'is_bio_diamond': salon.is_bio_diamond,
+        'about': salon.about,
         'services': services,
         'reviews': {
             'average_rating': avg_rating,
@@ -441,12 +456,24 @@ def get_services():
 @app.route('/api/salons/<int:salon_id>/availability', methods=['GET'])
 def get_availability(salon_id):
     date_str = request.args.get('date')
+    service_id = request.args.get('service_id', type=int)
+    
     if not date_str:
         return jsonify({'error': 'Date parameter required'}), 400
     
     try:
         date = datetime.strptime(date_str, '%Y-%m-%d').date()
         day_of_week = date.weekday()  # 0=Monday, 6=Sunday
+        
+        # Get service duration if service_id is provided
+        duration = 60  # Default duration
+        if service_id:
+            salon_service = SalonService.query.filter(
+                SalonService.salon_id == salon_id,
+                SalonService.service_id == service_id
+            ).first()
+            if salon_service:
+                duration = salon_service.duration
         
         # Get time slots for this day
         time_slots = TimeSlot.query.filter(
@@ -455,11 +482,11 @@ def get_availability(salon_id):
             TimeSlot.is_available == True
         ).all()
         
-        # Get existing bookings for this date
+        # Get existing bookings for this date (both confirmed and pending)
         existing_bookings = Booking.query.filter(
             Booking.salon_id == salon_id,
             Booking.booking_date == date,
-            Booking.status == 'confirmed'
+            Booking.status.in_(['confirmed', 'pending'])
         ).all()
         
         # Generate all time slots with availability status
@@ -472,22 +499,38 @@ def get_availability(salon_id):
                 slot_time = current_time.time()
                 slot_time_str = slot_time.strftime('%H:%M')
                 
-                # Check if this slot is already booked
-                is_booked = any(
-                    booking.booking_time == slot_time 
-                    for booking in existing_bookings
-                )
+                # Check if this slot and all consecutive slots needed for the service duration are available
+                is_available = True
+                service_end_time = current_time + timedelta(minutes=duration)
+                
+                # Check if the service would end within salon hours
+                if service_end_time > end_time:
+                    is_available = False
+                else:
+                    # Check if any of the required consecutive slots are booked
+                    check_time = current_time
+                    while check_time < service_end_time:
+                        check_slot_time = check_time.time()
+                        is_slot_booked = any(
+                            booking.booking_time == check_slot_time 
+                            for booking in existing_bookings
+                        )
+                        if is_slot_booked:
+                            is_available = False
+                            break
+                        check_time += timedelta(minutes=30)
                 
                 all_slots.append({
                     'time': slot_time_str,
-                    'available': not is_booked
+                    'available': is_available
                 })
                 
                 current_time += timedelta(minutes=30)
         
         return jsonify({
             'time_slots': all_slots,
-            'available_slots': [slot['time'] for slot in all_slots if slot['available']]  # Keep for backward compatibility
+            'available_slots': [slot['time'] for slot in all_slots if slot['available']],  # Keep for backward compatibility
+            'service_duration': duration
         })
         
     except ValueError:
@@ -516,18 +559,7 @@ def create_booking():
         if not salon.booking_enabled or not salon.is_active:
             return jsonify({'error': 'Booking is not available for this salon'}), 400
         
-        # Check if slot is available
-        existing_booking = Booking.query.filter(
-            Booking.salon_id == data['salon_id'],
-            Booking.booking_date == booking_date,
-            Booking.booking_time == booking_time,
-            Booking.status == 'confirmed'
-        ).first()
-        
-        if existing_booking:
-            return jsonify({'error': 'Time slot already booked'}), 400
-        
-        # Get service duration
+        # Get service duration first
         service = Service.query.get(data['service_id'])
         salon_service = SalonService.query.filter(
             SalonService.salon_id == data['salon_id'],
@@ -536,23 +568,73 @@ def create_booking():
         
         duration = salon_service.duration if salon_service else 60
         
-        booking = Booking(
-            salon_id=data['salon_id'],
-            service_id=data['service_id'],
-            customer_name=data['customer_name'],
-            customer_email=data['customer_email'],
-            customer_phone=data.get('customer_phone'),
-            booking_date=booking_date,
-            booking_time=booking_time,
-            duration=duration
-        )
+        # Check if all consecutive slots needed for the service duration are available
+        booking_start = datetime.combine(booking_date, booking_time)
+        booking_end = booking_start + timedelta(minutes=duration)
         
-        db.session.add(booking)
+        # Get salon's operating hours for this day
+        day_of_week = booking_date.weekday()
+        salon_time_slot = TimeSlot.query.filter(
+            TimeSlot.salon_id == data['salon_id'],
+            TimeSlot.day_of_week == day_of_week,
+            TimeSlot.is_available == True
+        ).first()
+        
+        if not salon_time_slot:
+            return jsonify({'error': 'Salon is closed on this day'}), 400
+        
+        salon_open = datetime.combine(booking_date, salon_time_slot.start_time)
+        salon_close = datetime.combine(booking_date, salon_time_slot.end_time)
+        
+        # Check if the service would end within salon hours
+        if booking_end > salon_close:
+            return jsonify({'error': 'Service duration exceeds salon closing time'}), 400
+        
+        # Check for conflicts across all required time slots
+        check_time = booking_start
+        while check_time < booking_end:
+            check_slot_time = check_time.time()
+            existing_booking = Booking.query.filter(
+                Booking.salon_id == data['salon_id'],
+                Booking.booking_date == booking_date,
+                Booking.booking_time == check_slot_time,
+                Booking.status.in_(['confirmed', 'pending'])
+            ).first()
+            
+            if existing_booking:
+                return jsonify({'error': 'Time slot already booked'}), 400
+            
+            check_time += timedelta(minutes=30)
+        
+        # Create booking records for each 30-minute slot that the service occupies
+        created_bookings = []
+        check_time = booking_start
+        
+        while check_time < booking_end:
+            slot_time = check_time.time()
+            
+            booking = Booking(
+                salon_id=data['salon_id'],
+                service_id=data['service_id'],
+                customer_name=data['customer_name'],
+                customer_email=data['customer_email'],
+                customer_phone=data.get('customer_phone'),
+                booking_date=booking_date,
+                booking_time=slot_time,
+                duration=30  # Each individual slot is 30 minutes
+            )
+            
+            db.session.add(booking)
+            created_bookings.append(booking)
+            check_time += timedelta(minutes=30)
+        
         db.session.commit()
         
         return jsonify({
-            'id': booking.id,
-            'message': 'Booking created successfully'
+            'id': created_bookings[0].id,  # Return the first booking ID as the main booking ID
+            'message': f'Booking created successfully for {len(created_bookings)} time slots',
+            'total_slots': len(created_bookings),
+            'service_duration': duration
         }), 201
         
     except ValueError as e:
@@ -844,7 +926,7 @@ def update_salon(salon_id):
     data = request.get_json()
     
     # Update salon fields
-    updatable_fields = ['nome', 'telefone', 'email', 'website', 'regiao', 'cidade', 'rua', 'porta', 'cod_postal']
+    updatable_fields = ['nome', 'telefone', 'email', 'website', 'regiao', 'cidade', 'rua', 'porta', 'cod_postal', 'about']
     for field in updatable_fields:
         if field in data:
             setattr(salon, field, data[field])
@@ -954,7 +1036,7 @@ def update_booking_status(booking_id):
     if 'status' not in data:
         return jsonify({'error': 'Status is required'}), 400
     
-    valid_statuses = ['confirmed', 'cancelled', 'completed']
+    valid_statuses = ['pending', 'confirmed', 'cancelled', 'completed']
     if data['status'] not in valid_statuses:
         return jsonify({'error': 'Invalid status'}), 400
     
@@ -1092,7 +1174,8 @@ def get_all_salons():
             'owner': {
                 'id': owner.id if owner else None,
                 'name': owner.name if owner else 'No Owner',
-                'email': owner.email if owner else None
+                'email': owner.email if owner else None,
+                'customer_id': owner.customer_id if owner else None
             } if owner else None,
             'created_at': salon.created_at.isoformat()
         })

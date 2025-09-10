@@ -43,6 +43,7 @@ interface AdminSalon {
     id: number;
     name: string;
     email: string;
+    customer_id?: string;
   };
   created_at: string;
 }
@@ -123,6 +124,31 @@ const AdminDashboard: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-PT');
+  };
+
+  // Group salons by owner
+  const groupSalonsByOwner = (salons: AdminSalon[]) => {
+    const grouped: { [key: string]: { owner: any; salons: AdminSalon[] } } = {};
+    
+    salons.forEach(salon => {
+      const ownerKey = salon.owner ? `${salon.owner.id}-${salon.owner.name}` : 'no-owner';
+      
+      if (!grouped[ownerKey]) {
+        grouped[ownerKey] = {
+          owner: salon.owner || { name: 'No Owner', customer_id: null },
+          salons: []
+        };
+      }
+      
+      grouped[ownerKey].salons.push(salon);
+    });
+    
+    // Sort owners by name, with "No Owner" at the end
+    return Object.entries(grouped).sort(([a], [b]) => {
+      if (a === 'no-owner') return 1;
+      if (b === 'no-owner') return -1;
+      return grouped[a].owner.name.localeCompare(grouped[b].owner.name);
+    });
   };
 
   if (loading && !stats && !users.length && !salons.length) {
@@ -374,88 +400,126 @@ const AdminDashboard: React.FC = () => {
 
         {/* Salons Tab */}
         {activeTab === 'salons' && (
-          <div className="bg-white shadow overflow-hidden sm:rounded-md">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900">Salons Management</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage salon settings and booking permissions</p>
+          <div className="space-y-6">
+            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+              <div className="px-4 py-5 sm:px-6">
+                <h3 className="text-lg leading-6 font-medium text-gray-900">Salons Management</h3>
+                <p className="mt-1 max-w-2xl text-sm text-gray-500">Manage salon settings and booking permissions</p>
+              </div>
             </div>
-            <ul className="divide-y divide-gray-200">
-              {salons.map((salon) => (
-                <li key={salon.id} className="px-4 py-4 sm:px-6">
+            
+            {groupSalonsByOwner(salons).map(([ownerKey, { owner, salons: ownerSalons }]) => (
+              <div key={ownerKey} className="bg-white shadow overflow-hidden sm:rounded-md">
+                {/* Owner Header */}
+                <div className="bg-gray-50 px-4 py-3 sm:px-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="flex-shrink-0">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                          salon.is_active ? 'bg-green-100' : 'bg-gray-100'
-                        }`}>
-                          <span className={`text-sm font-medium ${
-                            salon.is_active ? 'text-green-600' : 'text-gray-600'
-                          }`}>
-                            {salon.nome.charAt(0).toUpperCase()}
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-blue-600">
+                            {owner.name.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="flex items-center">
-                          <p className="text-sm font-medium text-gray-900">{salon.nome}</p>
-                          {!salon.is_active && (
-                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              Inactive
-                            </span>
+                      <div className="ml-3">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          {owner.name}
+                          {owner.customer_id && (
+                            <span className="ml-2 text-xs text-gray-500">(ID: {owner.customer_id})</span>
                           )}
-                          {salon.booking_enabled && (
-                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              Booking Enabled
-                            </span>
-                          )}
-                          {salon.is_bio_diamond && (
-                            <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500 text-white">
-                              BIO Diamond
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-500">{salon.cidade}, {salon.regiao}</p>
+                        </h4>
                         <p className="text-sm text-gray-500">
-                          {salon.owner ? `Owner: ${salon.owner.name}` : 'No Owner'} • {formatDate(salon.created_at)}
+                          {ownerSalons.length} salon{ownerSalons.length !== 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleToggleSalonBioDiamond(salon.id)}
-                        className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${
-                          salon.is_bio_diamond
-                            ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                            : 'text-purple-700 bg-purple-100 hover:bg-purple-200'
-                        }`}
-                      >
-                        {salon.is_bio_diamond ? 'Remove BIO Diamond' : 'Make BIO Diamond'}
-                      </button>
-                      <button
-                        onClick={() => handleToggleSalonBooking(salon.id)}
-                        className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${
-                          salon.booking_enabled
-                            ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                            : 'text-green-700 bg-green-100 hover:bg-green-200'
-                        }`}
-                      >
-                        {salon.booking_enabled ? 'Disable Booking' : 'Enable Booking'}
-                      </button>
-                      <button
-                        onClick={() => handleToggleSalonStatus(salon.id)}
-                        className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${
-                          salon.is_active
-                            ? 'text-red-700 bg-red-100 hover:bg-red-200'
-                            : 'text-green-700 bg-green-100 hover:bg-green-200'
-                        }`}
-                      >
-                        {salon.is_active ? 'Deactivate' : 'Activate'}
-                      </button>
+                    <div className="text-sm text-gray-500">
+                      Total: {ownerSalons.length}
                     </div>
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+                
+                {/* Salons List */}
+                <ul className="divide-y divide-gray-200">
+                  {ownerSalons.map((salon) => (
+                    <li key={salon.id} className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                              salon.is_active ? 'bg-green-100' : 'bg-gray-100'
+                            }`}>
+                              <span className={`text-sm font-medium ${
+                                salon.is_active ? 'text-green-600' : 'text-gray-600'
+                              }`}>
+                                {salon.nome.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="flex items-center">
+                              <p className="text-sm font-medium text-gray-900">{salon.nome}</p>
+                              {!salon.is_active && (
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Inactive
+                                </span>
+                              )}
+                              {salon.booking_enabled && (
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  Booking Enabled
+                                </span>
+                              )}
+                              {salon.is_bio_diamond && (
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500 text-white">
+                                  BIO Diamond
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">{salon.cidade}, {salon.regiao}</p>
+                            <p className="text-sm text-gray-500">
+                              Owner: {owner.name} • {formatDate(salon.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleToggleSalonBioDiamond(salon.id)}
+                            className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${
+                              salon.is_bio_diamond
+                                ? 'text-red-700 bg-red-100 hover:bg-red-200'
+                                : 'text-purple-700 bg-purple-100 hover:bg-purple-200'
+                            }`}
+                          >
+                            {salon.is_bio_diamond ? 'Remove BIO Diamond' : 'Make BIO Diamond'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleSalonBooking(salon.id)}
+                            className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${
+                              salon.booking_enabled
+                                ? 'text-red-700 bg-red-100 hover:bg-red-200'
+                                : 'text-green-700 bg-green-100 hover:bg-green-200'
+                            }`}
+                          >
+                            {salon.booking_enabled ? 'Disable Booking' : 'Enable Booking'}
+                          </button>
+                          <button
+                            onClick={() => handleToggleSalonStatus(salon.id)}
+                            className={`inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md ${
+                              salon.is_active
+                                ? 'text-red-700 bg-red-100 hover:bg-red-200'
+                                : 'text-green-700 bg-green-100 hover:bg-green-200'
+                            }`}
+                          >
+                            {salon.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
