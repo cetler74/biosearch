@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Phone, Mail, ExternalLink, Clock, Star } from 'lucide-react';
 import { salonAPI } from '../utils/api';
+import ReviewSection from '../components/review/ReviewSection';
+import StarRating from '../components/common/StarRating';
 
 const SalonDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,9 +52,15 @@ const SalonDetails: React.FC = () => {
                 <MapPin className="h-5 w-5 mr-2" />
                 <span>{salon.cidade}, {salon.regiao}</span>
               </div>
-              <div className="flex items-center space-x-1 text-yellow-400">
-                <Star className="h-5 w-5 fill-current" />
-                <span className="text-sm text-gray-600">4.5 (127 reviews)</span>
+              <div className="flex items-center space-x-2">
+                <StarRating 
+                  rating={salon.reviews?.average_rating || 0} 
+                  size="sm" 
+                  showNumber={true}
+                />
+                <span className="text-sm text-gray-600">
+                  ({salon.reviews?.total_reviews || 0} avaliações)
+                </span>
               </div>
             </div>
             
@@ -141,6 +149,14 @@ const SalonDetails: React.FC = () => {
                 We specialize in Bio Sculpture treatments and offer a wide range of nail services 
                 to keep your nails healthy and beautiful.
               </p>
+            </div>
+
+            {/* Reviews */}
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <ReviewSection 
+                salonId={salon.id} 
+                reviewSummary={salon.reviews || { average_rating: 0, total_reviews: 0 }}
+              />
             </div>
           </div>
 

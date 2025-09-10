@@ -116,6 +116,7 @@ class Salon(db.Model):
     services = db.relationship('SalonService', back_populates='salon', lazy='dynamic')
     bookings = db.relationship('Booking', back_populates='salon', lazy='dynamic')
     time_slots = db.relationship('TimeSlot', back_populates='salon', lazy='dynamic')
+    reviews = db.relationship('Review', back_populates='salon', lazy='dynamic')
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     owner = db.relationship('User', back_populates='salons')
 
@@ -198,6 +199,22 @@ class SalonManager(db.Model):
     password_hash = db.Column(db.String(200), nullable=False)
     name = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Review(db.Model):
+    __tablename__ = 'reviews'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    salon_id = db.Column(db.Integer, db.ForeignKey('salons.id'), nullable=False)
+    customer_name = db.Column(db.String(100), nullable=False)
+    customer_email = db.Column(db.String(100), nullable=False)
+    rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
+    title = db.Column(db.String(200))
+    comment = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_verified = db.Column(db.Boolean, default=False)
+    
+    # Relationships
+    salon = db.relationship('Salon', back_populates='reviews')
 
 # Authentication Routes
 @app.route('/api/auth/register', methods=['POST'])
@@ -319,6 +336,11 @@ def get_salon(salon_id):
         'duration': salon_service.duration
     } for salon_service, service in salon_services]
     
+    # Get review summary
+    reviews = Review.query.filter_by(salon_id=salon_id).all()
+    avg_rating = sum(review.rating for review in reviews) / len(reviews) if reviews else 0
+    total_reviews = len(reviews)
+    
     return jsonify({
         'id': salon.id,
         'nome': salon.nome,
@@ -332,7 +354,11 @@ def get_salon(salon_id):
         'cod_postal': salon.cod_postal,
         'latitude': salon.latitude,
         'longitude': salon.longitude,
-        'services': services
+        'services': services,
+        'reviews': {
+            'average_rating': round(avg_rating, 1),
+            'total_reviews': total_reviews
+        }
     })
 
 @app.route('/api/services', methods=['GET'])
@@ -482,6 +508,84 @@ def get_booking(booking_id):
         'status': booking.status,
         'created_at': booking.created_at.isoformat()
     })
+
+# Review endpoints
+@app.route('/api/salons/<int:salon_id>/reviews', methods=['GET'])
+def get_salon_reviews(salon_id):
+    """Get all reviews for a salon"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    reviews = Review.query.filter_by(salon_id=salon_id)\
+        .order_by(Review.created_at.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+    
+    # Calculate average rating
+    all_reviews = Review.query.filter_by(salon_id=salon_id).all()
+    avg_rating = sum(review.rating for review in all_reviews) / len(all_reviews) if all_reviews else 0
+    total_reviews = len(all_reviews)
+    
+    return jsonify({
+        'reviews': [{
+            'id': review.id,
+            'customer_name': review.customer_name,
+            'rating': review.rating,
+            'title': review.title,
+            'comment': review.comment,
+            'created_at': review.created_at.isoformat(),
+            'is_verified': review.is_verified
+        } for review in reviews.items],
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': reviews.total,
+            'pages': reviews.pages
+        },
+        'summary': {
+            'average_rating': round(avg_rating, 1),
+            'total_reviews': total_reviews
+        }
+    })
+
+@app.route('/api/salons/<int:salon_id>/reviews', methods=['POST'])
+def create_review(salon_id):
+    """Create a new review for a salon"""
+    data = request.get_json()
+    
+    required_fields = ['customer_name', 'customer_email', 'rating']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'error': f'Missing required field: {field}'}), 400
+    
+    # Validate rating
+    if not isinstance(data['rating'], int) or data['rating'] < 1 or data['rating'] > 5:
+        return jsonify({'error': 'Rating must be an integer between 1 and 5'}), 400
+    
+    # Check if salon exists
+    salon = Salon.query.get_or_404(salon_id)
+    
+    # Create review
+    review = Review(
+        salon_id=salon_id,
+        customer_name=data['customer_name'],
+        customer_email=data['customer_email'],
+        rating=data['rating'],
+        title=data.get('title', ''),
+        comment=data.get('comment', '')
+    )
+    
+    db.session.add(review)
+    db.session.commit()
+    
+    return jsonify({
+        'id': review.id,
+        'customer_name': review.customer_name,
+        'rating': review.rating,
+        'title': review.title,
+        'comment': review.comment,
+        'created_at': review.created_at.isoformat(),
+        'is_verified': review.is_verified
+    }), 201
 
 # Manager-specific routes
 @app.route('/api/manager/salons', methods=['GET'])

@@ -41,6 +41,10 @@ interface Salon {
   latitude?: number;
   longitude?: number;
   services?: SalonService[];
+  reviews?: {
+    average_rating: number;
+    total_reviews: number;
+  };
 }
 
 interface SalonService {
