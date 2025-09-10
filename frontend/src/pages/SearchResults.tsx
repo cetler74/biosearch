@@ -49,9 +49,19 @@ const SearchResults: React.FC = () => {
     const params = new URLSearchParams();
     Object.entries(updatedFilters).forEach(([key, value]) => {
       if (value && value !== '') {
-        params.set(key, value.toString());
+        // Map filter keys to URL parameter names
+        const urlKey = key === 'search' ? 'q' : key;
+        params.set(urlKey, value.toString());
       }
     });
+    
+    // Debug logging
+    if (newFilters.search) {
+      console.log('Search filter changed:', newFilters.search);
+      console.log('Updated filters:', updatedFilters);
+      console.log('URL params:', params.toString());
+    }
+    
     setSearchParams(params);
   };
 
@@ -221,14 +231,21 @@ const SearchResults: React.FC = () => {
             ) : viewMode === 'list' ? (
               <div>
                 {/* Results Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
                   {searchResults?.salons.map((salon) => (
-                    <div key={salon.id} className="card hover:shadow-md transition-shadow duration-200">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 truncate">
-                            {salon.nome}
-                          </h3>
+                    <div key={salon.id} className="card hover:shadow-2xl hover:-translate-y-2 hover:border-gray-300 hover:scale-[1.02] transition-all duration-300 ease-out">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4 gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900 break-words">
+                              {salon.nome}
+                            </h3>
+                            {salon.is_bio_diamond && (
+                              <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium self-start">
+                                BIO Diamond
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center text-gray-600 mb-2">
                             <span className="text-sm">
                               {salon.cidade}, {salon.regiao}
@@ -241,20 +258,27 @@ const SearchResults: React.FC = () => {
                           )}
                         </div>
                         
-                        <div className="flex items-center space-x-1 text-yellow-400">
+                        <div className="flex items-center space-x-1 text-yellow-400 self-start sm:self-auto">
                           <Star className="h-4 w-4 fill-current" />
-                          <span className="text-sm text-gray-600">4.5</span>
+                          <span className="text-sm text-gray-600">
+                            {salon.reviews?.average_rating || 0}
+                          </span>
+                          {salon.reviews?.total_reviews && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({salon.reviews.total_reviews})
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       {/* Contact Information */}
                       <div className="space-y-2 mb-4">
                         {salon.telefone && (
-                          <div className="flex items-center space-x-2">
-                            <Phone className="h-4 w-4 text-gray-400" />
+                          <div className="flex items-start space-x-2">
+                            <Phone className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                             <a 
                               href={`tel:${salon.telefone}`}
-                              className="text-sm text-gray-600 hover:text-blue-600"
+                              className="text-sm text-gray-600 hover:text-blue-600 break-all"
                             >
                               {salon.telefone}
                             </a>
@@ -262,11 +286,11 @@ const SearchResults: React.FC = () => {
                         )}
                         
                         {salon.email && (
-                          <div className="flex items-center space-x-2">
-                            <Mail className="h-4 w-4 text-gray-400" />
+                          <div className="flex items-start space-x-2">
+                            <Mail className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                             <a 
                               href={`mailto:${salon.email}`}
-                              className="text-sm text-gray-600 hover:text-blue-600"
+                              className="text-sm text-gray-600 hover:text-blue-600 break-all"
                             >
                               {salon.email}
                             </a>
@@ -274,13 +298,13 @@ const SearchResults: React.FC = () => {
                         )}
                         
                         {salon.website && (
-                          <div className="flex items-center space-x-2">
-                            <ExternalLink className="h-4 w-4 text-gray-400" />
+                          <div className="flex items-start space-x-2">
+                            <ExternalLink className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                             <a 
                               href={salon.website.startsWith('http') ? salon.website : `https://${salon.website}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-sm text-gray-600 hover:text-blue-600"
+                              className="text-sm text-gray-600 hover:text-blue-600 break-all"
                             >
                               Website
                             </a>
@@ -296,12 +320,14 @@ const SearchResults: React.FC = () => {
                         >
                           View Details
                         </a>
-                        <a 
-                          href={`/book/${salon.id}`}
-                          className="flex-1 btn-secondary text-center"
-                        >
-                          Book Now
-                        </a>
+                        {salon.booking_enabled !== false && (
+                          <a 
+                            href={`/book/${salon.id}`}
+                            className="flex-1 btn-secondary text-center"
+                          >
+                            Book Now
+                          </a>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -35,7 +35,7 @@
   
   /* Card styles */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-8 hover:shadow-md transition-shadow duration-200;
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-8;
   }
   
   .card-elevated {

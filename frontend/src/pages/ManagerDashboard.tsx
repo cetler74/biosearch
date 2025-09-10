@@ -581,7 +581,7 @@ const ManagerDashboard: React.FC = () => {
                       </div>
                       {service.is_bio_diamond && (
                         <div className="mt-2">
-                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-500 text-white">
                             BIO Diamond
                           </span>
                         </div>

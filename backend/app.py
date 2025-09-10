@@ -47,9 +47,29 @@ def require_auth(f):
             return jsonify({'error': 'Authentication required'}), 401
         
         token = auth_header.split(' ')[1]
-        user = User.query.filter_by(auth_token=token).first()
+        user = User.query.filter_by(auth_token=token, is_active=True).first()
         if not user:
             return jsonify({'error': 'Invalid token'}), 401
+        
+        request.current_user = user
+        return f(*args, **kwargs)
+    return decorated_function
+
+def require_admin(f):
+    """Decorator to require admin authentication"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        token = auth_header.split(' ')[1]
+        user = User.query.filter_by(auth_token=token, is_active=True).first()
+        if not user:
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        if not user.is_admin:
+            return jsonify({'error': 'Admin access required'}), 403
         
         request.current_user = user
         return f(*args, **kwargs)
@@ -107,18 +127,17 @@ class Salon(db.Model):
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    booking_enabled = db.Column(db.Boolean, default=True)
+    is_active = db.Column(db.Boolean, default=True)
+    is_bio_diamond = db.Column(db.Boolean, default=False)
     
     # Relationships
     owner = db.relationship('User', back_populates='salons')
-    
-    # Relationships
     services = db.relationship('SalonService', back_populates='salon', lazy='dynamic')
     bookings = db.relationship('Booking', back_populates='salon', lazy='dynamic')
     time_slots = db.relationship('TimeSlot', back_populates='salon', lazy='dynamic')
     reviews = db.relationship('Review', back_populates='salon', lazy='dynamic')
-    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    owner = db.relationship('User', back_populates='salons')
 
 class Service(db.Model):
     __tablename__ = 'services'
@@ -185,6 +204,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(200), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     auth_token = db.Column(db.String(200), unique=True)
+    is_admin = db.Column(db.Boolean, default=False)
+    is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -255,7 +276,7 @@ def login():
     if 'email' not in data or 'password' not in data:
         return jsonify({'error': 'Email and password required'}), 400
     
-    user = User.query.filter_by(email=data['email']).first()
+    user = User.query.filter_by(email=data['email'], is_active=True).first()
     if not user or not verify_password(data['password'], user.password_hash):
         return jsonify({'error': 'Invalid credentials'}), 401
     
@@ -263,7 +284,8 @@ def login():
         'id': user.id,
         'email': user.email,
         'name': user.name,
-        'token': user.auth_token
+        'token': user.auth_token,
+        'is_admin': user.is_admin
     })
 
 @app.route('/api/auth/me', methods=['GET'])
@@ -272,7 +294,8 @@ def get_current_user():
     return jsonify({
         'id': request.current_user.id,
         'email': request.current_user.email,
-        'name': request.current_user.name
+        'name': request.current_user.name,
+        'is_admin': request.current_user.is_admin
     })
 
 # API Routes
@@ -283,8 +306,13 @@ def get_salons():
     cidade = request.args.get('cidade')
     regiao = request.args.get('regiao')
     search = request.args.get('search')
+    bio_diamond_only = request.args.get('bio_diamond', 'false').lower() == 'true'
     
     query = Salon.query.filter(Salon.estado == 'Ativo')
+    
+    # Filter for BIO Diamond certified salons only
+    if bio_diamond_only:
+        query = query.filter(Salon.is_bio_diamond == True)
     
     if cidade:
         query = query.filter(Salon.cidade.ilike(f'%{cidade}%'))
@@ -297,8 +325,27 @@ def get_salons():
         page=page, per_page=per_page, error_out=False
     )
     
-    return jsonify({
-        'salons': [{
+    # Get all salon IDs for batch review query
+    salon_ids = [salon.id for salon in salons.items]
+    
+    # Get review summaries for all salons in one query
+    review_summaries = db.session.query(
+        Review.salon_id,
+        db.func.avg(Review.rating).label('avg_rating'),
+        db.func.count(Review.id).label('total_reviews')
+    ).filter(Review.salon_id.in_(salon_ids)).group_by(Review.salon_id).all()
+    
+    # Create a dictionary for quick lookup
+    review_dict = {summary.salon_id: {
+        'average_rating': round(float(summary.avg_rating or 0), 1),
+        'total_reviews': summary.total_reviews
+    } for summary in review_summaries}
+    
+    salon_data = []
+    for salon in salons.items:
+        reviews = review_dict.get(salon.id, {'average_rating': 0, 'total_reviews': 0})
+        
+        salon_data.append({
             'id': salon.id,
             'nome': salon.nome,
             'cidade': salon.cidade,
@@ -310,8 +357,14 @@ def get_salons():
             'porta': salon.porta,
             'cod_postal': salon.cod_postal,
             'latitude': salon.latitude,
-            'longitude': salon.longitude
-        } for salon in salons.items],
+            'longitude': salon.longitude,
+            'booking_enabled': salon.booking_enabled,
+            'is_bio_diamond': salon.is_bio_diamond,
+            'reviews': reviews
+        })
+    
+    return jsonify({
+        'salons': salon_data,
         'total': salons.total,
         'pages': salons.pages,
         'current_page': page
@@ -336,10 +389,14 @@ def get_salon(salon_id):
         'duration': salon_service.duration
     } for salon_service, service in salon_services]
     
-    # Get review summary
-    reviews = Review.query.filter_by(salon_id=salon_id).all()
-    avg_rating = sum(review.rating for review in reviews) / len(reviews) if reviews else 0
-    total_reviews = len(reviews)
+    # Get review summary using optimized query
+    review_summary = db.session.query(
+        db.func.avg(Review.rating).label('avg_rating'),
+        db.func.count(Review.id).label('total_reviews')
+    ).filter(Review.salon_id == salon_id).first()
+    
+    avg_rating = round(float(review_summary.avg_rating or 0), 1)
+    total_reviews = review_summary.total_reviews
     
     return jsonify({
         'id': salon.id,
@@ -354,9 +411,11 @@ def get_salon(salon_id):
         'cod_postal': salon.cod_postal,
         'latitude': salon.latitude,
         'longitude': salon.longitude,
+        'booking_enabled': salon.booking_enabled,
+        'is_bio_diamond': salon.is_bio_diamond,
         'services': services,
         'reviews': {
-            'average_rating': round(avg_rating, 1),
+            'average_rating': avg_rating,
             'total_reviews': total_reviews
         }
     })
@@ -448,6 +507,14 @@ def create_booking():
     try:
         booking_date = datetime.strptime(data['booking_date'], '%Y-%m-%d').date()
         booking_time = datetime.strptime(data['booking_time'], '%H:%M').time()
+        
+        # Check if salon exists and booking is enabled
+        salon = Salon.query.get(data['salon_id'])
+        if not salon:
+            return jsonify({'error': 'Salon not found'}), 404
+        
+        if not salon.booking_enabled or not salon.is_active:
+            return jsonify({'error': 'Booking is not available for this salon'}), 400
         
         # Check if slot is available
         existing_booking = Booking.query.filter(
@@ -606,6 +673,8 @@ def get_manager_salons():
         'porta': salon.porta,
         'cod_postal': salon.cod_postal,
         'estado': salon.estado,
+        'booking_enabled': salon.booking_enabled,
+        'is_bio_diamond': salon.is_bio_diamond,
         'created_at': salon.created_at.isoformat()
     } for salon in salons])
 
@@ -909,6 +978,207 @@ def delete_booking(booking_id):
     db.session.commit()
     
     return jsonify({'message': 'Booking deleted successfully'})
+
+# Admin Routes
+@app.route('/api/admin/users', methods=['GET'])
+@require_admin
+def get_all_users():
+    """Get all users with their salon count"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    users = User.query.paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    user_data = []
+    for user in users.items:
+        salon_count = user.salons.count()
+        user_data.append({
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'is_admin': user.is_admin,
+            'is_active': user.is_active,
+            'salon_count': salon_count,
+            'created_at': user.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'users': user_data,
+        'total': users.total,
+        'pages': users.pages,
+        'current_page': page
+    })
+
+@app.route('/api/admin/users/<int:user_id>', methods=['GET'])
+@require_admin
+def get_user_details(user_id):
+    """Get detailed information about a specific user and their salons"""
+    user = User.query.get_or_404(user_id)
+    
+    salons = user.salons.all()
+    salon_data = []
+    
+    for salon in salons:
+        salon_data.append({
+            'id': salon.id,
+            'nome': salon.nome,
+            'cidade': salon.cidade,
+            'regiao': salon.regiao,
+            'telefone': salon.telefone,
+            'email': salon.email,
+            'estado': salon.estado,
+            'booking_enabled': salon.booking_enabled,
+            'is_active': salon.is_active,
+            'created_at': salon.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'user': {
+            'id': user.id,
+            'name': user.name,
+            'email': user.email,
+            'is_admin': user.is_admin,
+            'is_active': user.is_active,
+            'created_at': user.created_at.isoformat()
+        },
+        'salons': salon_data
+    })
+
+@app.route('/api/admin/users/<int:user_id>/toggle-status', methods=['PUT'])
+@require_admin
+def toggle_user_status(user_id):
+    """Toggle user active status"""
+    user = User.query.get_or_404(user_id)
+    
+    # Prevent admin from deactivating themselves
+    if user.id == request.current_user.id:
+        return jsonify({'error': 'Cannot deactivate your own account'}), 400
+    
+    user.is_active = not user.is_active
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'User {"activated" if user.is_active else "deactivated"} successfully',
+        'is_active': user.is_active
+    })
+
+@app.route('/api/admin/salons', methods=['GET'])
+@require_admin
+def get_all_salons():
+    """Get all salons with owner information"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    
+    salons = Salon.query.paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    salon_data = []
+    for salon in salons.items:
+        owner = salon.owner
+        salon_data.append({
+            'id': salon.id,
+            'nome': salon.nome,
+            'cidade': salon.cidade,
+            'regiao': salon.regiao,
+            'telefone': salon.telefone,
+            'email': salon.email,
+            'estado': salon.estado,
+            'booking_enabled': salon.booking_enabled,
+            'is_active': salon.is_active,
+            'is_bio_diamond': salon.is_bio_diamond,
+            'owner': {
+                'id': owner.id if owner else None,
+                'name': owner.name if owner else 'No Owner',
+                'email': owner.email if owner else None
+            } if owner else None,
+            'created_at': salon.created_at.isoformat()
+        })
+    
+    return jsonify({
+        'salons': salon_data,
+        'total': salons.total,
+        'pages': salons.pages,
+        'current_page': page
+    })
+
+@app.route('/api/admin/salons/<int:salon_id>/toggle-booking', methods=['PUT'])
+@require_admin
+def toggle_salon_booking(salon_id):
+    """Toggle booking enabled status for a salon"""
+    salon = Salon.query.get_or_404(salon_id)
+    
+    salon.booking_enabled = not salon.booking_enabled
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'Booking {"enabled" if salon.booking_enabled else "disabled"} for salon {salon.nome}',
+        'booking_enabled': salon.booking_enabled
+    })
+
+@app.route('/api/admin/salons/<int:salon_id>/toggle-status', methods=['PUT'])
+@require_admin
+def toggle_salon_status(salon_id):
+    """Toggle salon active status"""
+    salon = Salon.query.get_or_404(salon_id)
+    
+    salon.is_active = not salon.is_active
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'Salon {"activated" if salon.is_active else "deactivated"} successfully',
+        'is_active': salon.is_active
+    })
+
+@app.route('/api/admin/salons/<int:salon_id>/toggle-bio-diamond', methods=['PUT'])
+@require_admin
+def toggle_salon_bio_diamond(salon_id):
+    """Toggle BIO Diamond status for a salon"""
+    salon = Salon.query.get_or_404(salon_id)
+    
+    salon.is_bio_diamond = not salon.is_bio_diamond
+    db.session.commit()
+    
+    return jsonify({
+        'message': f'BIO Diamond status {"enabled" if salon.is_bio_diamond else "disabled"} for salon {salon.nome}',
+        'is_bio_diamond': salon.is_bio_diamond
+    })
+
+@app.route('/api/admin/stats', methods=['GET'])
+@require_admin
+def get_admin_stats():
+    """Get admin dashboard statistics"""
+    total_users = User.query.count()
+    active_users = User.query.filter_by(is_active=True).count()
+    admin_users = User.query.filter_by(is_admin=True, is_active=True).count()
+    
+    total_salons = Salon.query.count()
+    active_salons = Salon.query.filter_by(is_active=True).count()
+    booking_enabled_salons = Salon.query.filter_by(booking_enabled=True, is_active=True).count()
+    
+    total_bookings = Booking.query.count()
+    recent_bookings = Booking.query.filter(
+        Booking.created_at >= datetime.utcnow() - timedelta(days=7)
+    ).count()
+    
+    return jsonify({
+        'users': {
+            'total': total_users,
+            'active': active_users,
+            'admins': admin_users
+        },
+        'salons': {
+            'total': total_salons,
+            'active': active_salons,
+            'booking_enabled': booking_enabled_salons
+        },
+        'bookings': {
+            'total': total_bookings,
+            'recent_week': recent_bookings
+        }
+    })
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])

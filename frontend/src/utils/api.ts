@@ -6,6 +6,7 @@ interface User {
   email: string;
   name: string;
   token?: string;
+  is_admin?: boolean;
 }
 
 interface LoginRequest {
@@ -24,6 +25,7 @@ interface AuthResponse {
   email: string;
   name: string;
   token: string;
+  is_admin?: boolean;
 }
 
 // Temporary inline types to avoid import issues
@@ -176,10 +178,19 @@ export const salonAPI = {
     if (filters.search) params.append('search', filters.search);
     if (filters.cidade) params.append('cidade', filters.cidade);
     if (filters.regiao) params.append('regiao', filters.regiao);
+    if (filters.bio_diamond) params.append('bio_diamond', 'true');
     params.append('page', page.toString());
     params.append('per_page', perPage.toString());
     
-    const response = await api.get(`/salons?${params.toString()}`);
+    const url = `/salons?${params.toString()}`;
+    
+    // Debug logging
+    if (filters.search) {
+      console.log('API call with search:', filters.search);
+      console.log('Full URL:', url);
+    }
+    
+    const response = await api.get(url);
     return response.data;
   },
 
@@ -323,6 +334,128 @@ export const healthAPI = {
   // Health check
   healthCheck: async (): Promise<{ status: string; timestamp: string }> => {
     const response = await api.get('/health');
+    return response.data;
+  },
+};
+
+// Admin API types
+interface AdminUser {
+  id: number;
+  name: string;
+  email: string;
+  is_admin: boolean;
+  is_active: boolean;
+  salon_count: number;
+  created_at: string;
+}
+
+interface AdminSalon {
+  id: number;
+  nome: string;
+  cidade: string;
+  regiao: string;
+  telefone?: string;
+  email?: string;
+  estado: string;
+  booking_enabled: boolean;
+  is_active: boolean;
+  is_bio_diamond: boolean;
+  owner?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  created_at: string;
+}
+
+interface AdminStats {
+  users: {
+    total: number;
+    active: number;
+    admins: number;
+  };
+  salons: {
+    total: number;
+    active: number;
+    booking_enabled: number;
+  };
+  bookings: {
+    total: number;
+    recent_week: number;
+  };
+}
+
+export const adminAPI = {
+  // Get all users with pagination
+  getUsers: async (page = 1, perPage = 20): Promise<{
+    users: AdminUser[];
+    total: number;
+    pages: number;
+    current_page: number;
+  }> => {
+    const response = await api.get(`/admin/users?page=${page}&per_page=${perPage}`);
+    return response.data;
+  },
+
+  // Get user details with salons
+  getUserDetails: async (userId: number): Promise<{
+    user: AdminUser;
+    salons: AdminSalon[];
+  }> => {
+    const response = await api.get(`/admin/users/${userId}`);
+    return response.data;
+  },
+
+  // Toggle user status
+  toggleUserStatus: async (userId: number): Promise<{
+    message: string;
+    is_active: boolean;
+  }> => {
+    const response = await api.put(`/admin/users/${userId}/toggle-status`);
+    return response.data;
+  },
+
+  // Get all salons with pagination
+  getSalons: async (page = 1, perPage = 20): Promise<{
+    salons: AdminSalon[];
+    total: number;
+    pages: number;
+    current_page: number;
+  }> => {
+    const response = await api.get(`/admin/salons?page=${page}&per_page=${perPage}`);
+    return response.data;
+  },
+
+  // Toggle salon booking status
+  toggleSalonBooking: async (salonId: number): Promise<{
+    message: string;
+    booking_enabled: boolean;
+  }> => {
+    const response = await api.put(`/admin/salons/${salonId}/toggle-booking`);
+    return response.data;
+  },
+
+  // Toggle salon status
+  toggleSalonStatus: async (salonId: number): Promise<{
+    message: string;
+    is_active: boolean;
+  }> => {
+    const response = await api.put(`/admin/salons/${salonId}/toggle-status`);
+    return response.data;
+  },
+
+  // Toggle salon BIO Diamond status
+  toggleSalonBioDiamond: async (salonId: number): Promise<{
+    message: string;
+    is_bio_diamond: boolean;
+  }> => {
+    const response = await api.put(`/admin/salons/${salonId}/toggle-bio-diamond`);
+    return response.data;
+  },
+
+  // Get admin dashboard statistics
+  getStats: async (): Promise<AdminStats> => {
+    const response = await api.get('/admin/stats');
     return response.data;
   },
 };

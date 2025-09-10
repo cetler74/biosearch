@@ -1,13 +1,22 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { salonAPI } from '../utils/api';
-import { Sparkles, Star, Phone, Mail, ExternalLink } from 'lucide-react';
+import { Sparkles, Star, Phone, Mail, ExternalLink, RefreshCw } from 'lucide-react';
 
 const BioDiamondPage: React.FC = () => {
-  const { data: searchResults, isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  
+  const { data: searchResults, isLoading, refetch } = useQuery({
     queryKey: ['bio-diamond-salons'],
-    queryFn: () => salonAPI.getSalons({ bio_diamond: true }, 1, 50)
+    queryFn: () => salonAPI.getSalons({ bio_diamond: true }, 1, 50),
+    staleTime: 0,
+    cacheTime: 0,
+    refetchOnWindowFocus: true
   });
+
+  const handleRefresh = () => {
+    refetch();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -23,10 +32,17 @@ const BioDiamondPage: React.FC = () => {
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
               BIO Diamond Services
             </h1>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-6">
               Discover salons offering premium Bio Sculpture gel nail treatments. 
               Experience long-lasting, natural-looking nails with professional care.
             </p>
+            <button
+              onClick={handleRefresh}
+              className="inline-flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh BIO Diamond Salons
+            </button>
           </div>
         </div>
       </div>
@@ -44,6 +60,7 @@ const BioDiamondPage: React.FC = () => {
           )}
         </div>
 
+
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -58,9 +75,11 @@ const BioDiamondPage: React.FC = () => {
                       <h3 className="text-lg font-semibold text-gray-900 truncate">
                         {salon.nome}
                       </h3>
-                      <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-                        BIO Diamond
-                      </span>
+                      {salon.is_bio_diamond && (
+                        <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+                          BIO Diamond
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex items-center text-gray-600 mb-2">
@@ -78,7 +97,14 @@ const BioDiamondPage: React.FC = () => {
                   
                   <div className="flex items-center space-x-1 text-yellow-400">
                     <Star className="h-4 w-4 fill-current" />
-                    <span className="text-sm text-gray-600">4.5</span>
+                    <span className="text-sm text-gray-600">
+                      {salon.reviews?.average_rating || 0}
+                    </span>
+                    {salon.reviews?.total_reviews && (
+                      <span className="text-xs text-gray-500 ml-1">
+                        ({salon.reviews.total_reviews})
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -131,12 +157,14 @@ const BioDiamondPage: React.FC = () => {
                   >
                     View Details
                   </a>
-                  <a 
-                    href={`/book/${salon.id}`}
-                    className="flex-1 btn-secondary text-center"
-                  >
-                    Book Now
-                  </a>
+                  {salon.booking_enabled !== false && (
+                    <a 
+                      href={`/book/${salon.id}`}
+                      className="flex-1 btn-secondary text-center"
+                    >
+                      Book Now
+                    </a>
+                  )}
                 </div>
               </div>
             ))}

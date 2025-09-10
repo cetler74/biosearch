@@ -175,7 +175,7 @@ const BookingPage: React.FC = () => {
                           </div>
                         </div>
                         {service.is_bio_diamond && (
-                          <span className="inline-block mt-1 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                          <span className="inline-block mt-1 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
                             BIO Diamond
                           </span>
                         )}

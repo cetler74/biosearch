@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Menu, X } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface HeaderProps {
   onSearch?: (query: string) => void;
@@ -10,6 +11,25 @@ const Header: React.FC<HeaderProps> = ({ onSearch }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const { isAuthenticated, isAdmin, user, logout, loading } = useAuth();
+
+  // Show loading state while auth is initializing
+  if (loading) {
+    return (
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <Link to="/" className="text-xl font-bold text-primary-600">
+                BioSearch
+              </Link>
+            </div>
+            <div className="animate-pulse bg-gray-200 h-8 w-32 rounded"></div>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,12 +81,40 @@ const Header: React.FC<HeaderProps> = ({ onSearch }) => {
             >
               BIO Diamond
             </Link>
-            <Link
-              to="/manager"
-              className="btn-primary text-sm"
-            >
-              Manager Login
-            </Link>
+            {isAuthenticated ? (
+              <div className="flex items-center space-x-4">
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors duration-200"
+                  >
+                    Admin
+                  </Link>
+                )}
+                <Link
+                  to="/manager"
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors duration-200"
+                >
+                  Manager
+                </Link>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">Welcome, {user?.name}</span>
+                  <button
+                    onClick={logout}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Link
+                to="/manager"
+                className="btn-primary text-sm"
+              >
+                Manager Login
+              </Link>
+            )}
           </nav>
 
           {/* Mobile menu button */}
@@ -119,13 +167,46 @@ const Header: React.FC<HeaderProps> = ({ onSearch }) => {
             >
               BIO Diamond
             </Link>
-            <Link
-              to="/manager"
-              className="block btn-primary text-center"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Manager Login
-            </Link>
+            {isAuthenticated ? (
+              <>
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="block text-gray-600 hover:text-gray-900 text-base font-medium transition-colors duration-200"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Admin
+                  </Link>
+                )}
+                <Link
+                  to="/manager"
+                  className="block text-gray-600 hover:text-gray-900 text-base font-medium transition-colors duration-200"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Manager
+                </Link>
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-sm text-gray-600 mb-2">Welcome, {user?.name}</p>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </>
+            ) : (
+              <Link
+                to="/manager"
+                className="block btn-primary text-center"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Manager Login
+              </Link>
+            )}
           </div>
         </div>
       )}

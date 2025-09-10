@@ -11,7 +11,13 @@ export interface Salon {
   cod_postal?: string;
   latitude?: number;
   longitude?: number;
+  booking_enabled?: boolean;
+  is_bio_diamond?: boolean;
   services?: SalonService[];
+  reviews?: {
+    average_rating: number;
+    total_reviews: number;
+  };
 }
 
 export interface Service {

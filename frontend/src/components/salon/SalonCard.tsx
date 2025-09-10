@@ -54,8 +54,8 @@ const SalonCard: React.FC<SalonCardProps> = ({ salon, showServices = false }) =>
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {salon.nome}
             </h3>
-            {hasBioServices && (
-              <span className="bg-secondary-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+            {(salon.is_bio_diamond || hasBioServices) && (
+              <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium">
                 BIO Diamond
               </span>
             )}
@@ -79,7 +79,14 @@ const SalonCard: React.FC<SalonCardProps> = ({ salon, showServices = false }) =>
         
         <div className="flex items-center space-x-1 text-yellow-400">
           <Star className="h-4 w-4 fill-current" />
-          <span className="text-sm text-gray-600">4.5</span>
+          <span className="text-sm text-gray-600">
+            {salon.reviews?.average_rating || 0}
+          </span>
+          {salon.reviews?.total_reviews && (
+            <span className="text-xs text-gray-500 ml-1">
+              ({salon.reviews.total_reviews})
+            </span>
+          )}
         </div>
       </div>
 
@@ -158,12 +165,14 @@ const SalonCard: React.FC<SalonCardProps> = ({ salon, showServices = false }) =>
         >
           View Details
         </Link>
-        <Link 
-          to={`/book/${salon.id}`}
-          className="flex-1 btn-secondary text-center"
-        >
-          Book Now
-        </Link>
+        {salon.booking_enabled !== false && (
+          <Link 
+            to={`/book/${salon.id}`}
+            className="flex-1 btn-secondary text-center"
+          >
+            Book Now
+          </Link>
+        )}
       </div>
     </div>
   );

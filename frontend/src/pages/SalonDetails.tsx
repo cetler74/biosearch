@@ -37,7 +37,8 @@ const SalonDetails: React.FC = () => {
     );
   }
 
-  const bioServices = salon.services?.filter(service => service.is_bio_diamond) || [];
+  // Only show BIO Diamond services if the salon itself is BIO Diamond certified
+  const bioServices = salon.is_bio_diamond ? (salon.services?.filter(service => service.is_bio_diamond) || []) : [];
   const regularServices = salon.services?.filter(service => !service.is_bio_diamond) || [];
 
   return (
@@ -47,7 +48,14 @@ const SalonDetails: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex flex-col md:flex-row justify-between items-start gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{salon.nome}</h1>
+              <div className="flex items-center space-x-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">{salon.nome}</h1>
+                {salon.is_bio_diamond && (
+                  <span className="bg-yellow-500 text-white text-sm px-3 py-1 rounded-full font-medium">
+                    BIO Diamond
+                  </span>
+                )}
+              </div>
               <div className="flex items-center text-gray-600 mb-2">
                 <MapPin className="h-5 w-5 mr-2" />
                 <span>{salon.cidade}, {salon.regiao}</span>
@@ -65,12 +73,14 @@ const SalonDetails: React.FC = () => {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link
-                to={`/book/${salon.id}`}
-                className="btn-primary text-center"
-              >
-                Book Appointment
-              </Link>
+              {salon.booking_enabled !== false && (
+                <Link
+                  to={`/book/${salon.id}`}
+                  className="btn-primary text-center"
+                >
+                  Book Appointment
+                </Link>
+              )}
               <button className="btn-secondary">
                 Save Salon
               </button>

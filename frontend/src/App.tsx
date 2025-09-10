@@ -10,6 +10,7 @@ import SalonDetails from './pages/SalonDetails';
 import BookingPage from './pages/BookingPage';
 import BioDiamondPage from './pages/BioDiamondPage';
 import ManagerDashboard from './pages/ManagerDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import AuthPage from './components/auth/AuthPage';
 
 // Create a client
@@ -44,6 +45,42 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Admin Protected Route Component
+const AdminProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isAdmin, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AuthPage />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">403</h1>
+          <p className="text-gray-600 mb-8">Access denied. Admin privileges required.</p>
+          <a href="/" className="btn-primary">
+            Go Home
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -62,6 +99,11 @@ function App() {
                   <ProtectedRoute>
                     <ManagerDashboard />
                   </ProtectedRoute>
+                } />
+                <Route path="/admin" element={
+                  <AdminProtectedRoute>
+                    <AdminDashboard />
+                  </AdminProtectedRoute>
                 } />
                 <Route path="/login" element={<AuthPage />} />
                 {/* Add more routes as needed */}

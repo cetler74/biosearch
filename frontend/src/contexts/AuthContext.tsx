@@ -7,6 +7,7 @@ interface User {
   email: string;
   name: string;
   token?: string;
+  is_admin?: boolean;
 }
 
 interface LoginRequest {
@@ -27,6 +28,7 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: response.id,
         email: response.email,
         name: response.name,
+        is_admin: response.is_admin,
       });
     } catch (error) {
       throw error;
@@ -86,6 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: response.id,
         email: response.email,
         name: response.name,
+        is_admin: response.is_admin,
       });
     } catch (error) {
       throw error;
@@ -104,6 +108,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     loading,
     isAuthenticated: !!user,
+    isAdmin: !!user?.is_admin,
   };
 
   return (
