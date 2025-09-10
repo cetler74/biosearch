@@ -92,11 +92,35 @@ interface Booking extends BookingRequest {
   created_at: string;
 }
 
-interface AvailabilityResponse {
-  available_slots: string[];
+interface TimeSlot {
+  time: string;
+  available: boolean;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+interface AvailabilityResponse {
+  available_slots: string[];
+  time_slots: TimeSlot[];
+}
+
+// Dynamically determine API URL based on current hostname
+const getApiBaseUrl = () => {
+  // If environment variable is set, use it
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Otherwise, use the current hostname with port 5001
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  return `${protocol}//${hostname}:5001/api`;
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Log the API URL for debugging
+console.log('API Base URL:', API_BASE_URL);
+console.log('Current location:', window.location.href);
+console.log('Hostname:', window.location.hostname);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -104,6 +128,32 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor for debugging
+api.interceptors.request.use(
+  (config) => {
+    console.log('Making API request to:', config.url);
+    console.log('Full URL:', config.baseURL + config.url);
+    return config;
+  },
+  (error) => {
+    console.error('Request error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+  (response) => {
+    console.log('API response:', response.status, response.config.url);
+    return response;
+  },
+  (error) => {
+    console.error('API error:', error.response?.status, error.response?.statusText, error.config?.url);
+    console.error('Error details:', error.message);
+    return Promise.reject(error);
+  }
+);
 
 // Add auth token to requests
 api.interceptors.request.use((config) => {
@@ -231,6 +281,36 @@ export const managerAPI = {
   // Update booking status
   updateBookingStatus: async (bookingId: number, status: string): Promise<{ message: string }> => {
     const response = await api.put(`/manager/bookings/${bookingId}/status`, { status });
+    return response.data;
+  },
+
+  // Create booking (for managers)
+  createBooking: async (bookingData: any): Promise<{ id: number; message: string }> => {
+    const response = await api.post('/bookings', bookingData);
+    return response.data;
+  },
+
+  // Delete booking
+  deleteBooking: async (bookingId: number): Promise<{ message: string }> => {
+    const response = await api.delete(`/manager/bookings/${bookingId}`);
+    return response.data;
+  },
+
+  // Get salon opening hours
+  getOpeningHours: async (salonId: number): Promise<{ opening_hours: any }> => {
+    const response = await api.get(`/manager/salons/${salonId}/opening-hours`);
+    return response.data;
+  },
+
+  // Update salon opening hours
+  updateOpeningHours: async (salonId: number, openingHours: any): Promise<{ message: string }> => {
+    const response = await api.put(`/manager/salons/${salonId}/opening-hours`, { opening_hours: openingHours });
+    return response.data;
+  },
+
+  // Update salon basic information
+  updateSalon: async (salonId: number, salonData: any): Promise<{ message: string }> => {
+    const response = await api.put(`/manager/salons/${salonId}`, salonData);
     return response.data;
   },
 };

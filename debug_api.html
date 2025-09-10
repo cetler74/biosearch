@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Debug</title>
+</head>
+<body>
+    <h1>API Debug Information</h1>
+    <div id="debug-info"></div>
+    <div id="test-results"></div>
+    
+    <script>
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+        const apiUrl = `${protocol}//${hostname}:5001/api`;
+        
+        document.getElementById('debug-info').innerHTML = `
+            <h2>Current Location Info:</h2>
+            <p><strong>Hostname:</strong> ${hostname}</p>
+            <p><strong>Protocol:</strong> ${protocol}</p>
+            <p><strong>Full URL:</strong> ${window.location.href}</p>
+            <p><strong>API URL:</strong> ${apiUrl}</p>
+        `;
+        
+        // Test API connectivity
+        document.getElementById('test-results').innerHTML = '<h2>Testing API Connectivity...</h2>';
+        
+        fetch(`${apiUrl}/health`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('test-results').innerHTML += `
+                    <p style="color: green;">✅ Health Check: SUCCESS</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                // Test salon API
+                return fetch(`${apiUrl}/salons/1`);
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('test-results').innerHTML += `
+                    <p style="color: green;">✅ Salon API: SUCCESS</p>
+                    <p>Salon Name: ${data.nome}</p>
+                    <p>Services: ${data.services.length}</p>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('test-results').innerHTML += `
+                    <p style="color: red;">❌ API Test Failed</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>API URL:</strong> ${apiUrl}</p>
+                `;
+            });
+    </script>
+</body>
+</html>

@@ -1,12 +1,23 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Calendar, Clock, User, Phone, Mail, Check } from 'lucide-react';
-import { salonAPI } from '../utils/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Calendar, Clock, User, Phone, Mail, Check, AlertCircle } from 'lucide-react';
+import { salonAPI, bookingAPI } from '../utils/api';
+// Inline types to avoid import issues
+interface BookingRequest {
+  salon_id: number;
+  service_id: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  booking_date: string;
+  booking_time: string;
+}
 
 const BookingPage: React.FC = () => {
   const { salonId } = useParams<{ salonId: string }>();
   const salonIdNum = parseInt(salonId || '0');
+  const queryClient = useQueryClient();
   
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -17,6 +28,7 @@ const BookingPage: React.FC = () => {
     phone: ''
   });
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [bookingError, setBookingError] = useState<string>('');
 
   const { data: salon, isLoading } = useQuery({
     queryKey: ['salon', salonIdNum],
@@ -24,15 +36,43 @@ const BookingPage: React.FC = () => {
     enabled: salonIdNum > 0
   });
 
-  // Mock available time slots
-  const availableSlots = [
-    '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'
-  ];
+  // Fetch available time slots based on selected date
+  const { data: availabilityData, isLoading: availabilityLoading } = useQuery({
+    queryKey: ['availability', salonIdNum, selectedDate],
+    queryFn: () => salonAPI.getAvailability(salonIdNum, selectedDate),
+    enabled: !!selectedDate && salonIdNum > 0
+  });
+
+  const timeSlots = availabilityData?.time_slots || [];
+  const availableSlots = availabilityData?.available_slots || [];
+
+  const createBookingMutation = useMutation({
+    mutationFn: (bookingData: BookingRequest) => bookingAPI.createBooking(bookingData),
+    onSuccess: () => {
+      setShowConfirmation(true);
+      setBookingError('');
+      // Invalidate availability query to refresh available slots
+      queryClient.invalidateQueries({ queryKey: ['availability', salonIdNum, selectedDate] });
+    },
+    onError: (error: any) => {
+      setBookingError(error.response?.data?.error || 'Failed to create booking. Please try again.');
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedDate && selectedTime && selectedService && customerInfo.name && customerInfo.email && customerInfo.phone) {
-      setShowConfirmation(true);
+      const bookingData: BookingRequest = {
+        salon_id: salonIdNum,
+        service_id: selectedService,
+        customer_name: customerInfo.name,
+        customer_email: customerInfo.email,
+        customer_phone: customerInfo.phone,
+        booking_date: selectedDate,
+        booking_time: selectedTime
+      };
+      
+      createBookingMutation.mutate(bookingData);
     }
   };
 
@@ -97,6 +137,16 @@ const BookingPage: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Select Your Appointment</h3>
             
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Error Message */}
+              {bookingError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
+                  <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 mr-3 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-sm font-medium text-red-800">Booking Error</h3>
+                    <p className="text-sm text-red-700 mt-1">{bookingError}</p>
+                  </div>
+                </div>
+              )}
               {/* Service Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -143,7 +193,10 @@ const BookingPage: React.FC = () => {
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setSelectedTime(''); // Clear selected time when date changes
+                  }}
                   min={new Date().toISOString().split('T')[0]}
                   className="input-field"
                   required
@@ -151,29 +204,52 @@ const BookingPage: React.FC = () => {
               </div>
 
               {/* Time Selection */}
-              {selectedDate && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Time
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Time
+                </label>
+                {!selectedDate ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500">Please select a date first</p>
+                  </div>
+                ) : availabilityLoading ? (
+                  <div className="text-center py-4">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                    <p className="text-sm text-gray-500 mt-2">Loading available times...</p>
+                  </div>
+                ) : timeSlots.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
-                    {availableSlots.map((time) => (
+                    {timeSlots.map((slot) => (
                       <button
-                        key={time}
+                        key={slot.time}
                         type="button"
-                        onClick={() => setSelectedTime(time)}
+                        onClick={() => slot.available && setSelectedTime(slot.time)}
+                        disabled={!slot.available}
                         className={`py-2 px-3 text-sm font-medium rounded-lg border transition-colors ${
-                          selectedTime === time
+                          !slot.available
+                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                            : selectedTime === slot.time
                             ? 'bg-blue-500 text-white border-blue-500'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                         }`}
+                        title={!slot.available ? 'This time slot is already booked' : ''}
                       >
-                        {time}
+                        <div className="flex flex-col items-center">
+                          <span>{slot.time}</span>
+                          {!slot.available && (
+                            <span className="text-xs text-gray-400 mt-1">Booked</span>
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-500">No available time slots for this date</p>
+                    <p className="text-xs text-gray-400 mt-1">Please select a different date</p>
+                  </div>
+                )}
+              </div>
 
               {/* Customer Information */}
               <div className="space-y-4">
@@ -221,10 +297,10 @@ const BookingPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={!selectedDate || !selectedTime || !selectedService || !customerInfo.name || !customerInfo.email || !customerInfo.phone}
+                disabled={!selectedDate || !selectedTime || !selectedService || !customerInfo.name || !customerInfo.email || !customerInfo.phone || createBookingMutation.isPending}
                 className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirm Booking
+                {createBookingMutation.isPending ? 'Creating Booking...' : 'Confirm Booking'}
               </button>
             </form>
           </div>

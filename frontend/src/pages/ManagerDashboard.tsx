@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, User, Phone, Mail, Plus, Eye, LogOut, Settings, Trash2, Edit, Building } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { managerAPI, serviceAPI } from '../utils/api';
 import SalonForm from '../components/manager/SalonForm';
 import ServiceForm from '../components/manager/ServiceForm';
+import SalonEditForm from '../components/manager/SalonEditForm';
+import OpeningHoursForm from '../components/manager/OpeningHoursForm';
+import OpeningHoursDisplay from '../components/manager/OpeningHoursDisplay';
 
 const ManagerDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'bookings' | 'salon' | 'salons'>('salons');
+  const [activeTab, setActiveTab] = useState<'bookings' | 'salon' | 'salons' | 'salon-info' | 'opening-hours'>('salons');
   const [selectedSalon, setSelectedSalon] = useState<any>(null);
   const [salons, setSalons] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -16,8 +20,22 @@ const ManagerDashboard: React.FC = () => {
   const [showSalonForm, setShowSalonForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [showSalonEditForm, setShowSalonEditForm] = useState(false);
+  const [showOpeningHoursForm, setShowOpeningHoursForm] = useState(false);
+  const [openingHoursRefreshTrigger, setOpeningHoursRefreshTrigger] = useState(0);
+  const [salonRefreshTrigger, setSalonRefreshTrigger] = useState(0);
+  const [bookingForm, setBookingForm] = useState({
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
+    service_id: '',
+    booking_date: '',
+    booking_time: ''
+  });
   
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     loadSalons();
@@ -29,6 +47,23 @@ const ManagerDashboard: React.FC = () => {
       loadServices(selectedSalon.id);
     }
   }, [selectedSalon]);
+
+  // Refresh salon data when trigger changes
+  useEffect(() => {
+    if (salonRefreshTrigger > 0) {
+      loadSalons();
+    }
+  }, [salonRefreshTrigger]);
+
+  // Update selectedSalon when salons data changes
+  useEffect(() => {
+    if (salons.length > 0 && selectedSalon) {
+      const updatedSalon = salons.find(salon => salon.id === selectedSalon.id);
+      if (updatedSalon) {
+        setSelectedSalon(updatedSalon);
+      }
+    }
+  }, [salons, selectedSalon]);
 
   const loadSalons = async () => {
     try {
@@ -83,6 +118,54 @@ const ManagerDashboard: React.FC = () => {
         loadServices(selectedSalon.id);
       } catch (err: any) {
         setError(err.message || 'Failed to delete service');
+      }
+    }
+  };
+
+  const handleCreateBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSalon) return;
+
+    try {
+      const bookingData = {
+        salon_id: selectedSalon.id,
+        service_id: parseInt(bookingForm.service_id),
+        customer_name: bookingForm.customer_name,
+        customer_email: bookingForm.customer_email,
+        customer_phone: bookingForm.customer_phone,
+        booking_date: bookingForm.booking_date,
+        booking_time: bookingForm.booking_time
+      };
+
+      await managerAPI.createBooking(bookingData);
+      setShowBookingForm(false);
+      setBookingForm({
+        customer_name: '',
+        customer_email: '',
+        customer_phone: '',
+        service_id: '',
+        booking_date: '',
+        booking_time: ''
+      });
+      loadBookings();
+      // Invalidate availability queries for all salons to refresh available slots
+      queryClient.invalidateQueries({ queryKey: ['availability'] });
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      setError('Failed to create booking');
+    }
+  };
+
+  const handleDeleteBooking = async (bookingId: number) => {
+    if (window.confirm('Are you sure you want to delete this booking?')) {
+      try {
+      await managerAPI.deleteBooking(bookingId);
+      loadBookings();
+      // Invalidate availability queries for all salons to refresh available slots
+      queryClient.invalidateQueries({ queryKey: ['availability'] });
+      } catch (error) {
+        console.error('Error deleting booking:', error);
+        setError('Failed to delete booking');
       }
     }
   };
@@ -189,6 +272,28 @@ const ManagerDashboard: React.FC = () => {
                   <Settings className="h-5 w-5 inline mr-2" />
                   Services & Info
                 </button>
+                <button
+                  onClick={() => setActiveTab('salon-info')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'salon-info'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Building className="h-5 w-5 inline mr-2" />
+                  Salon Info
+                </button>
+                <button
+                  onClick={() => setActiveTab('opening-hours')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'opening-hours'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Clock className="h-5 w-5 inline mr-2" />
+                  Opening Hours
+                </button>
               </nav>
             </div>
           </div>
@@ -256,8 +361,15 @@ const ManagerDashboard: React.FC = () => {
 
             {/* Bookings List */}
             <div className="bg-white rounded-lg shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-gray-900">Recent Bookings</h2>
+                <button
+                  onClick={() => setShowBookingForm(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Booking
+                </button>
               </div>
               
               <div className="overflow-x-auto">
@@ -305,7 +417,9 @@ const ManagerDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">Service ID: {booking.service_id}</div>
+                            <div className="text-sm text-gray-900">
+                              {services.find(service => service.id === booking.service_id)?.name || `Service ID: ${booking.service_id}`}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{booking.booking_date}</div>
@@ -330,6 +444,15 @@ const ManagerDashboard: React.FC = () => {
                               <option value="cancelled">Cancelled</option>
                               <option value="completed">Completed</option>
                             </select>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => handleDeleteBooking(booking.id)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Delete booking"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -511,6 +634,221 @@ const ManagerDashboard: React.FC = () => {
               setEditingService(null);
             }}
             editingService={editingService}
+          />
+        )}
+
+        {/* Booking Form Modal */}
+        {showBookingForm && selectedSalon && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Create New Booking</h3>
+                  <button
+                    onClick={() => setShowBookingForm(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <form onSubmit={handleCreateBooking} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Customer Name</label>
+                    <input
+                      type="text"
+                      value={bookingForm.customer_name}
+                      onChange={(e) => setBookingForm({...bookingForm, customer_name: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Customer Email</label>
+                    <input
+                      type="email"
+                      value={bookingForm.customer_email}
+                      onChange={(e) => setBookingForm({...bookingForm, customer_email: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Customer Phone</label>
+                    <input
+                      type="tel"
+                      value={bookingForm.customer_phone}
+                      onChange={(e) => setBookingForm({...bookingForm, customer_phone: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Service</label>
+                    <select
+                      value={bookingForm.service_id}
+                      onChange={(e) => setBookingForm({...bookingForm, service_id: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    >
+                      <option value="">Select a service</option>
+                      {services.map((service) => (
+                        <option key={service.id} value={service.id}>
+                          {service.name} - €{service.price}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Date</label>
+                    <input
+                      type="date"
+                      value={bookingForm.booking_date}
+                      onChange={(e) => setBookingForm({...bookingForm, booking_date: e.target.value})}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Time</label>
+                    <input
+                      type="time"
+                      value={bookingForm.booking_time}
+                      onChange={(e) => setBookingForm({...bookingForm, booking_time: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowBookingForm(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                    >
+                      Create Booking
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Salon Information Tab */}
+        {activeTab === 'salon-info' && selectedSalon && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Salon Information</h2>
+                <button
+                  onClick={() => setShowSalonEditForm(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Information
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Salon Name</label>
+                      <p className="text-gray-900">{selectedSalon.nome}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Phone</label>
+                      <p className="text-gray-900">{selectedSalon.telefone || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Email</label>
+                      <p className="text-gray-900">{selectedSalon.email || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Website</label>
+                      <p className="text-gray-900">{selectedSalon.website || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Address</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Street</label>
+                      <p className="text-gray-900">{selectedSalon.rua || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Door Number</label>
+                      <p className="text-gray-900">{selectedSalon.porta || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Postal Code</label>
+                      <p className="text-gray-900">{selectedSalon.cod_postal || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">City</label>
+                      <p className="text-gray-900">{selectedSalon.cidade || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Region</label>
+                      <p className="text-gray-900">{selectedSalon.regiao || 'Not provided'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Opening Hours Tab */}
+        {activeTab === 'opening-hours' && selectedSalon && (
+          <OpeningHoursDisplay 
+            key={`opening-hours-${selectedSalon.id}`}
+            salon={selectedSalon}
+            onEdit={() => setShowOpeningHoursForm(true)}
+            refreshTrigger={openingHoursRefreshTrigger}
+          />
+        )}
+
+        {/* Modals */}
+        {showSalonEditForm && selectedSalon && (
+          <SalonEditForm
+            salon={selectedSalon}
+            onClose={() => setShowSalonEditForm(false)}
+            onSuccess={() => {
+              setShowSalonEditForm(false);
+              // Trigger refresh of salon data
+              setSalonRefreshTrigger(prev => prev + 1);
+            }}
+          />
+        )}
+
+        {showOpeningHoursForm && selectedSalon && (
+          <OpeningHoursForm
+            salon={selectedSalon}
+            onClose={() => setShowOpeningHoursForm(false)}
+            onSuccess={() => {
+              setShowOpeningHoursForm(false);
+              // Trigger refresh of opening hours display
+              setOpeningHoursRefreshTrigger(prev => prev + 1);
+            }}
           />
         )}
       </div>

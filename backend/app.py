@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import os
 import sqlite3
 import pandas as pd
@@ -13,8 +13,11 @@ app = Flask(__name__)
 CORS(app)
 
 # Database configuration
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "biosearch.db")}'
+# Use home directory to avoid permission issues with external drives
+import os
+home_dir = os.path.expanduser("~")
+db_path = os.path.join(home_dir, "biosearch.db")
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your-secret-key-here'  # Change this in production
 
@@ -51,6 +54,36 @@ def require_auth(f):
         request.current_user = user
         return f(*args, **kwargs)
     return decorated_function
+
+def create_default_time_slots(salon_id):
+    """Create default time slots for a salon"""
+    time_slots = []
+    
+    # Monday to Friday (9 AM to 6 PM)
+    for day in range(5):  # Monday to Friday (0-4)
+        time_slots.append(TimeSlot(
+            salon_id=salon_id,
+            day_of_week=day,
+            start_time=time(9, 0),
+            end_time=time(18, 0),
+            is_available=True
+        ))
+    
+    # Saturday (10 AM to 4 PM)
+    time_slots.append(TimeSlot(
+        salon_id=salon_id,
+        day_of_week=5,  # Saturday
+        start_time=time(10, 0),
+        end_time=time(16, 0),
+        is_available=True
+    ))
+    
+    # Sunday (closed - no time slots)
+    
+    for time_slot in time_slots:
+        db.session.add(time_slot)
+    
+    return time_slots
 
 # Database Models
 class Salon(db.Model):
@@ -344,14 +377,15 @@ def get_availability(salon_id):
             Booking.status == 'confirmed'
         ).all()
         
-        # Generate available slots
-        available_slots = []
+        # Generate all time slots with availability status
+        all_slots = []
         for slot in time_slots:
             current_time = datetime.combine(date, slot.start_time)
             end_time = datetime.combine(date, slot.end_time)
             
             while current_time + timedelta(minutes=30) <= end_time:
                 slot_time = current_time.time()
+                slot_time_str = slot_time.strftime('%H:%M')
                 
                 # Check if this slot is already booked
                 is_booked = any(
@@ -359,12 +393,17 @@ def get_availability(salon_id):
                     for booking in existing_bookings
                 )
                 
-                if not is_booked:
-                    available_slots.append(slot_time.strftime('%H:%M'))
+                all_slots.append({
+                    'time': slot_time_str,
+                    'available': not is_booked
+                })
                 
                 current_time += timedelta(minutes=30)
         
-        return jsonify({'available_slots': available_slots})
+        return jsonify({
+            'time_slots': all_slots,
+            'available_slots': [slot['time'] for slot in all_slots if slot['available']]  # Keep for backward compatibility
+        })
         
     except ValueError:
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
@@ -495,6 +534,10 @@ def create_salon():
     db.session.add(salon)
     db.session.commit()
     
+    # Create default time slots for the new salon
+    create_default_time_slots(salon.id)
+    db.session.commit()
+    
     return jsonify({
         'id': salon.id,
         'nome': salon.nome,
@@ -546,6 +589,95 @@ def get_salon_services(salon_id):
         'price': salon_service.price,
         'duration': salon_service.duration
     } for salon_service, service in salon_services])
+
+@app.route('/api/manager/salons/<int:salon_id>/opening-hours', methods=['GET'])
+@require_auth
+def get_salon_opening_hours(salon_id):
+    """Get opening hours for a salon"""
+    salon = Salon.query.filter_by(id=salon_id, owner_id=request.current_user.id).first()
+    if not salon:
+        return jsonify({'error': 'Salon not found'}), 404
+    
+    # Get all time slots for this salon
+    time_slots = TimeSlot.query.filter_by(salon_id=salon_id).all()
+    
+    # Organize by day of week
+    opening_hours = {}
+    for day in range(7):  # 0=Monday, 6=Sunday
+        day_slots = [slot for slot in time_slots if slot.day_of_week == day]
+        if day_slots:
+            # Get the earliest start and latest end for this day
+            start_times = [slot.start_time for slot in day_slots if slot.start_time]
+            end_times = [slot.end_time for slot in day_slots if slot.end_time]
+            if start_times and end_times:
+                opening_hours[day] = {
+                    'start_time': min(start_times).strftime('%H:%M'),
+                    'end_time': max(end_times).strftime('%H:%M'),
+                    'is_open': True
+                }
+        else:
+            opening_hours[day] = {
+                'start_time': None,
+                'end_time': None,
+                'is_open': False
+            }
+    
+    return jsonify({'opening_hours': opening_hours})
+
+@app.route('/api/manager/salons/<int:salon_id>/opening-hours', methods=['PUT'])
+@require_auth
+def update_salon_opening_hours(salon_id):
+    """Update opening hours for a salon"""
+    salon = Salon.query.filter_by(id=salon_id, owner_id=request.current_user.id).first()
+    if not salon:
+        return jsonify({'error': 'Salon not found'}), 404
+    
+    data = request.get_json()
+    opening_hours = data.get('opening_hours', {})
+    
+    # Delete existing time slots for this salon
+    TimeSlot.query.filter_by(salon_id=salon_id).delete()
+    
+    # Create new time slots based on opening hours
+    for day, hours in opening_hours.items():
+        day = int(day)
+        if hours.get('is_open') and hours.get('start_time') and hours.get('end_time'):
+            try:
+                start_time = datetime.strptime(hours['start_time'], '%H:%M').time()
+                end_time = datetime.strptime(hours['end_time'], '%H:%M').time()
+                
+                time_slot = TimeSlot(
+                    salon_id=salon_id,
+                    day_of_week=day,
+                    start_time=start_time,
+                    end_time=end_time,
+                    is_available=True
+                )
+                db.session.add(time_slot)
+            except ValueError:
+                return jsonify({'error': f'Invalid time format for day {day}'}), 400
+    
+    db.session.commit()
+    return jsonify({'message': 'Opening hours updated successfully'})
+
+@app.route('/api/manager/salons/<int:salon_id>', methods=['PUT'])
+@require_auth
+def update_salon(salon_id):
+    """Update salon basic information"""
+    salon = Salon.query.filter_by(id=salon_id, owner_id=request.current_user.id).first()
+    if not salon:
+        return jsonify({'error': 'Salon not found'}), 404
+    
+    data = request.get_json()
+    
+    # Update salon fields
+    updatable_fields = ['nome', 'telefone', 'email', 'website', 'regiao', 'cidade', 'rua', 'porta', 'cod_postal']
+    for field in updatable_fields:
+        if field in data:
+            setattr(salon, field, data[field])
+    
+    db.session.commit()
+    return jsonify({'message': 'Salon updated successfully'})
 
 @app.route('/api/manager/salons/<int:salon_id>/services', methods=['POST'])
 @require_auth
@@ -657,6 +789,22 @@ def update_booking_status(booking_id):
     db.session.commit()
     
     return jsonify({'message': 'Booking status updated successfully'})
+
+@app.route('/api/manager/bookings/<int:booking_id>', methods=['DELETE'])
+@require_auth
+def delete_booking(booking_id):
+    """Delete a booking"""
+    booking = Booking.query.get_or_404(booking_id)
+    
+    # Check if the user owns the salon
+    salon = Salon.query.filter_by(id=booking.salon_id, owner_id=request.current_user.id).first()
+    if not salon:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    db.session.delete(booking)
+    db.session.commit()
+    
+    return jsonify({'message': 'Booking deleted successfully'})
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])

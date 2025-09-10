@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Network API Test</title>
+</head>
+<body>
+    <h1>Network API Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const hostname = window.location.hostname;
+        const apiUrl = `http://${hostname}:5001/api/health`;
+        
+        document.getElementById('results').innerHTML = `
+            <p>Current hostname: ${hostname}</p>
+            <p>API URL: ${apiUrl}</p>
+            <p>Testing API connection...</p>
+        `;
+        
+        fetch(apiUrl)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('results').innerHTML += `
+                    <p style="color: green;">✅ API Connection Successful!</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('results').innerHTML += `
+                    <p style="color: red;">❌ API Connection Failed!</p>
+                    <p>Error: ${error.message}</p>
+                `;
+            });
+    </script>
+</body>
+</html>

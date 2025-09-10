@@ -9,6 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.app import app, db, Service, Salon, SalonService, TimeSlot, User, hash_password
 from datetime import time
+import secrets
 
 def seed_data():
     with app.app_context():
@@ -26,7 +27,8 @@ def seed_data():
         user = User(
             name="Demo Manager",
             email="demo@example.com",
-            password_hash=hash_password("demo123")
+            password_hash=hash_password("demo123"),
+            auth_token=secrets.token_hex(32)
         )
         db.session.add(user)
         db.session.commit()
@@ -113,31 +115,39 @@ def seed_data():
         db.session.commit()
         print(f"Added {len(salon_services)} services to salon")
         
-        # Create time slots for the salon (Monday to Friday, 9 AM to 6 PM)
-        time_slots = []
-        for day in range(5):  # Monday to Friday (0-4)
+        # Create time slots for all salons (Monday to Friday, 9 AM to 6 PM)
+        all_salons = Salon.query.all()
+        total_time_slots = 0
+        
+        for salon in all_salons:
+            time_slots = []
+            for day in range(5):  # Monday to Friday (0-4)
+                time_slots.append(TimeSlot(
+                    salon_id=salon.id,
+                    day_of_week=day,
+                    start_time=time(9, 0),
+                    end_time=time(18, 0),
+                    is_available=True
+                ))
+            
+            # Saturday (10 AM to 4 PM)
             time_slots.append(TimeSlot(
                 salon_id=salon.id,
-                day_of_week=day,
-                start_time=time(9, 0),
-                end_time=time(18, 0),
+                day_of_week=5,  # Saturday
+                start_time=time(10, 0),
+                end_time=time(16, 0),
                 is_available=True
             ))
-        
-        # Saturday (10 AM to 4 PM)
-        time_slots.append(TimeSlot(
-            salon_id=salon.id,
-            day_of_week=5,  # Saturday
-            start_time=time(10, 0),
-            end_time=time(16, 0),
-            is_available=True
-        ))
-        
-        for time_slot in time_slots:
-            db.session.add(time_slot)
+            
+            # Sunday is closed (no time slots)
+            
+            for time_slot in time_slots:
+                db.session.add(time_slot)
+            
+            total_time_slots += len(time_slots)
         
         db.session.commit()
-        print(f"Created {len(time_slots)} time slots")
+        print(f"Created {total_time_slots} time slots for {len(all_salons)} salons")
         
         print("Database seeded successfully!")
 
