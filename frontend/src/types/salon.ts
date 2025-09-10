@@ -13,6 +13,7 @@ export interface Salon {
   longitude?: number;
   booking_enabled?: boolean;
   is_bio_diamond?: boolean;
+  about?: string;
   services?: SalonService[];
   reviews?: {
     average_rating: number;

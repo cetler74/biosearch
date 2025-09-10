@@ -69,7 +69,8 @@ const ServiceForm: React.FC<ServiceFormProps> = ({ salonId, onClose, onSuccess, 
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to save service');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to save service';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

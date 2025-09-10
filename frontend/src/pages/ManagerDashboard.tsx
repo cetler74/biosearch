@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, User, Phone, Mail, Plus, Eye, LogOut, Settings, Trash2, Edit, Building } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { managerAPI, serviceAPI } from '../utils/api';
+import { managerAPI, serviceAPI, salonAPI } from '../utils/api';
 import SalonForm from '../components/manager/SalonForm';
 import ServiceForm from '../components/manager/ServiceForm';
 import SalonEditForm from '../components/manager/SalonEditForm';
 import OpeningHoursForm from '../components/manager/OpeningHoursForm';
 import OpeningHoursDisplay from '../components/manager/OpeningHoursDisplay';
+import BookingCalendar from '../components/manager/BookingCalendar';
 
 const ManagerDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'bookings' | 'salon' | 'salons' | 'salon-info' | 'opening-hours'>('salons');
@@ -33,6 +34,9 @@ const ManagerDashboard: React.FC = () => {
     booking_date: '',
     booking_time: ''
   });
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
+  const [bookingViewMode, setBookingViewMode] = useState<'list' | 'calendar'>('list');
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(undefined);
   
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
@@ -65,6 +69,49 @@ const ManagerDashboard: React.FC = () => {
     }
   }, [salons, selectedSalon]);
 
+  // Fetch available time slots for booking form
+  const { data: availabilityData, isLoading: availabilityLoading } = useQuery({
+    queryKey: ['availability', selectedSalon?.id, bookingForm.booking_date, bookingForm.service_id],
+    queryFn: () => salonAPI.getAvailability(selectedSalon?.id || 0, bookingForm.booking_date, parseInt(bookingForm.service_id) || undefined),
+    enabled: !!bookingForm.booking_date && !!selectedSalon?.id && !!bookingForm.service_id
+  });
+
+  const timeSlots = availabilityData?.time_slots || [];
+  const availableSlots = availabilityData?.available_slots || [];
+
+  // Function to check if a slot should be highlighted based on selected time and service duration
+  const isSlotHighlighted = (slotTime: string) => {
+    if (!selectedTimeSlot || !bookingForm.service_id) return false;
+    
+    const selectedServiceData = services.find(s => s.id === parseInt(bookingForm.service_id));
+    if (!selectedServiceData) return false;
+    
+    const duration = selectedServiceData.duration;
+    const selectedTimeMinutes = timeToMinutes(selectedTimeSlot);
+    const slotTimeMinutes = timeToMinutes(slotTime);
+    
+    // Check if this slot is within the service duration from the selected start time
+    return slotTimeMinutes >= selectedTimeMinutes && 
+           slotTimeMinutes < selectedTimeMinutes + duration;
+  };
+
+  // Helper function to convert time string to minutes
+  const timeToMinutes = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  // Reset selected time slot when date or service changes
+  const handleDateChange = (date: string) => {
+    setBookingForm({...bookingForm, booking_date: date});
+    setSelectedTimeSlot('');
+  };
+
+  const handleServiceChange = (serviceId: string) => {
+    setBookingForm({...bookingForm, service_id: serviceId});
+    setSelectedTimeSlot('');
+  };
+
   const loadSalons = async () => {
     try {
       setLoading(true);
@@ -74,7 +121,8 @@ const ManagerDashboard: React.FC = () => {
         setSelectedSalon(data[0]);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load salons');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load salons';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -85,7 +133,8 @@ const ManagerDashboard: React.FC = () => {
       const data = await managerAPI.getSalonBookings(salonId);
       setBookings(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to load bookings');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load bookings';
+      setError(errorMessage);
     }
   };
 
@@ -94,7 +143,8 @@ const ManagerDashboard: React.FC = () => {
       const data = await managerAPI.getSalonServices(salonId);
       setServices(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to load services');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to load services';
+      setError(errorMessage);
     }
   };
 
@@ -105,7 +155,8 @@ const ManagerDashboard: React.FC = () => {
         loadBookings(selectedSalon.id);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to update booking status');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to update booking status';
+      setError(errorMessage);
     }
   };
 
@@ -117,14 +168,15 @@ const ManagerDashboard: React.FC = () => {
         await managerAPI.deleteSalonService(selectedSalon.id, serviceId);
         loadServices(selectedSalon.id);
       } catch (err: any) {
-        setError(err.message || 'Failed to delete service');
+        const errorMessage = err.response?.data?.error || err.message || 'Failed to delete service';
+        setError(errorMessage);
       }
     }
   };
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSalon) return;
+    if (!selectedSalon || !selectedTimeSlot) return;
 
     try {
       const bookingData = {
@@ -134,7 +186,7 @@ const ManagerDashboard: React.FC = () => {
         customer_email: bookingForm.customer_email,
         customer_phone: bookingForm.customer_phone,
         booking_date: bookingForm.booking_date,
-        booking_time: bookingForm.booking_time
+        booking_time: selectedTimeSlot
       };
 
       await managerAPI.createBooking(bookingData);
@@ -147,6 +199,7 @@ const ManagerDashboard: React.FC = () => {
         booking_date: '',
         booking_time: ''
       });
+      setSelectedTimeSlot('');
       loadBookings();
       // Invalidate availability queries for all salons to refresh available slots
       queryClient.invalidateQueries({ queryKey: ['availability'] });
@@ -359,10 +412,36 @@ const ManagerDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Bookings List */}
+            {/* Bookings View Toggle */}
             <div className="bg-white rounded-lg shadow-sm">
               <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-gray-900">Recent Bookings</h2>
+                <div className="flex items-center space-x-4">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {bookingViewMode === 'list' ? 'Recent Bookings' : 'Booking Calendar'}
+                  </h2>
+                  <div className="flex bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setBookingViewMode('list')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        bookingViewMode === 'list'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      List View
+                    </button>
+                    <button
+                      onClick={() => setBookingViewMode('calendar')}
+                      className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                        bookingViewMode === 'calendar'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Calendar View
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={() => setShowBookingForm(true)}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -372,7 +451,8 @@ const ManagerDashboard: React.FC = () => {
                 </button>
               </div>
               
-              <div className="overflow-x-auto">
+              {bookingViewMode === 'list' ? (
+                <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -460,6 +540,18 @@ const ManagerDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              ) : (
+                <div className="p-6">
+                  <BookingCalendar
+                    bookings={bookings.map(booking => ({
+                      ...booking,
+                      service: services.find(service => service.id === booking.service_id)
+                    }))}
+                    onDateSelect={setSelectedCalendarDate}
+                    selectedDate={selectedCalendarDate}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -640,12 +732,15 @@ const ManagerDashboard: React.FC = () => {
         {/* Booking Form Modal */}
         {showBookingForm && selectedSalon && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
               <div className="mt-3">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-medium text-gray-900">Create New Booking</h3>
                   <button
-                    onClick={() => setShowBookingForm(false)}
+                    onClick={() => {
+                      setShowBookingForm(false);
+                      setSelectedTimeSlot('');
+                    }}
                     className="text-gray-400 hover:text-gray-600"
                   >
                     <span className="sr-only">Close</span>
@@ -692,7 +787,7 @@ const ManagerDashboard: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700">Service</label>
                     <select
                       value={bookingForm.service_id}
-                      onChange={(e) => setBookingForm({...bookingForm, service_id: e.target.value})}
+                      onChange={(e) => handleServiceChange(e.target.value)}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                       required
                     >
@@ -710,7 +805,7 @@ const ManagerDashboard: React.FC = () => {
                     <input
                       type="date"
                       value={bookingForm.booking_date}
-                      onChange={(e) => setBookingForm({...bookingForm, booking_date: e.target.value})}
+                      onChange={(e) => handleDateChange(e.target.value)}
                       min={new Date().toISOString().split('T')[0]}
                       className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                       required
@@ -718,20 +813,58 @@ const ManagerDashboard: React.FC = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Time</label>
-                    <input
-                      type="time"
-                      value={bookingForm.booking_time}
-                      onChange={(e) => setBookingForm({...bookingForm, booking_time: e.target.value})}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                      required
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Time
+                    </label>
+                    {!bookingForm.booking_date ? (
+                      <div className="text-center py-4">
+                        <p className="text-sm text-gray-500">Please select a date first</p>
+                      </div>
+                    ) : availabilityLoading ? (
+                      <div className="text-center py-4">
+                        <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                        <p className="text-sm text-gray-500 mt-2">Loading available times...</p>
+                      </div>
+                    ) : timeSlots.length > 0 ? (
+                      <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                        {timeSlots.map((slot) => (
+                          <button
+                            key={slot.time}
+                            type="button"
+                            onClick={() => slot.available && setSelectedTimeSlot(slot.time)}
+                            disabled={!slot.available}
+                            className={`py-2 px-3 text-sm font-medium rounded-lg border transition-colors ${
+                              !slot.available
+                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : isSlotHighlighted(slot.time)
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                            title={!slot.available ? 'This time slot is already booked' : ''}
+                          >
+                            <div className="flex flex-col items-center">
+                              <span>{slot.time}</span>
+                              {!slot.available && (
+                                <span className="text-xs text-gray-400 mt-1">Booked</span>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-sm text-gray-500">No time slots available for this date</p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex justify-end space-x-3 pt-4">
                     <button
                       type="button"
-                      onClick={() => setShowBookingForm(false)}
+                      onClick={() => {
+                        setShowBookingForm(false);
+                        setSelectedTimeSlot('');
+                      }}
                       className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
                     >
                       Cancel
@@ -811,6 +944,18 @@ const ManagerDashboard: React.FC = () => {
                       <p className="text-gray-900">{selectedSalon.regiao || 'Not provided'}</p>
                     </div>
                   </div>
+                </div>
+              </div>
+              
+              {/* About Section */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">About</h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  {selectedSalon.about ? (
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{selectedSalon.about}</p>
+                  ) : (
+                    <p className="text-gray-500 italic">No about information provided yet.</p>
+                  )}
                 </div>
               </div>
             </div>

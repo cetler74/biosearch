@@ -153,12 +153,16 @@ const SalonDetails: React.FC = () => {
 
             {/* About */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">About This Salon</h2>
-              <p className="text-gray-600 leading-relaxed">
-                Welcome to {salon.nome}, your premier destination for professional nail care services. 
-                We specialize in Bio Sculpture treatments and offer a wide range of nail services 
-                to keep your nails healthy and beautiful.
-              </p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">About</h2>
+              {salon.about ? (
+                <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{salon.about}</p>
+              ) : (
+                <p className="text-gray-600 leading-relaxed">
+                  Welcome to {salon.nome}, your premier destination for professional nail care services. 
+                  We specialize in Bio Sculpture treatments and offer a wide range of nail services 
+                  to keep your nails healthy and beautiful.
+                </p>
+              )}
             </div>
 
             {/* Reviews */}

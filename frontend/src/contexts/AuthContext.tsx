@@ -6,6 +6,7 @@ interface User {
   id: number;
   email: string;
   name: string;
+  customer_id?: string;
   token?: string;
   is_admin?: boolean;
 }
@@ -19,6 +20,7 @@ interface RegisterRequest {
   email: string;
   password: string;
   name: string;
+  customer_id: string;
 }
 
 interface AuthContextType {
@@ -89,6 +91,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: response.id,
         email: response.email,
         name: response.name,
+        customer_id: response.customer_id,
         is_admin: response.is_admin,
       });
     } catch (error) {

@@ -19,6 +19,7 @@ const SalonForm: React.FC<SalonFormProps> = ({ onClose, onSuccess }) => {
     porta: '',
     cod_postal: '',
     pais: 'Portugal',
+    about: 'Welcome to our salon! We specialize in professional nail care, beauty treatments, and exceptional customer service. Our experienced team is dedicated to providing you with the highest quality services in a relaxing and comfortable environment. We use only premium products and the latest techniques to ensure you leave feeling beautiful and refreshed. Book your appointment today and experience the difference!',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -29,17 +30,33 @@ const SalonForm: React.FC<SalonFormProps> = ({ onClose, onSuccess }) => {
     setLoading(true);
 
     try {
+      console.log('Submitting salon data:', formData); // Debug log
       await managerAPI.createSalon(formData);
+      // Reset form data after successful submission
+      setFormData({
+        nome: '',
+        cidade: '',
+        regiao: '',
+        telefone: '',
+        email: '',
+        website: '',
+        rua: '',
+        porta: '',
+        cod_postal: '',
+        pais: 'Portugal',
+        about: 'Welcome to our salon! We specialize in professional nail care, beauty treatments, and exceptional customer service. Our experienced team is dedicated to providing you with the highest quality services in a relaxing and comfortable environment. We use only premium products and the latest techniques to ensure you leave feeling beautiful and refreshed. Book your appointment today and experience the difference!',
+      });
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to create salon');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to create salon';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -239,6 +256,25 @@ const SalonForm: React.FC<SalonFormProps> = ({ onClose, onSuccess }) => {
                 placeholder="Enter postal code"
               />
             </div>
+          </div>
+
+          {/* About Section */}
+          <div>
+            <label htmlFor="about" className="block text-sm font-medium text-gray-700 mb-2">
+              About Your Salon
+            </label>
+            <textarea
+              id="about"
+              name="about"
+              value={formData.about}
+              onChange={handleChange}
+              rows={4}
+              placeholder="Customize this text to describe your salon..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This text will be displayed on your salon's public page
+            </p>
           </div>
 
           <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">

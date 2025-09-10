@@ -11,6 +11,7 @@ interface AdminStats {
     total: number;
     active: number;
     booking_enabled: number;
+    total_services: number;
   };
   bookings: {
     total: number;
@@ -26,6 +27,17 @@ interface AdminUser {
   is_active: boolean;
   salon_count: number;
   created_at: string;
+}
+
+interface AdminSalonService {
+  id: number;
+  service_id: number;
+  name: string;
+  category: string;
+  description: string;
+  is_bio_diamond: boolean;
+  price: number;
+  duration: number;
 }
 
 interface AdminSalon {
@@ -45,6 +57,8 @@ interface AdminSalon {
     email: string;
     customer_id?: string;
   };
+  services: AdminSalonService[];
+  services_count: number;
   created_at: string;
 }
 
@@ -57,6 +71,7 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [expandedSalons, setExpandedSalons] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -124,6 +139,32 @@ const AdminDashboard: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-PT');
+  };
+
+  const toggleSalonExpansion = (salonId: number) => {
+    const newExpanded = new Set(expandedSalons);
+    if (newExpanded.has(salonId)) {
+      newExpanded.delete(salonId);
+    } else {
+      newExpanded.add(salonId);
+    }
+    setExpandedSalons(newExpanded);
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('pt-PT', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(price);
+  };
+
+  const formatDuration = (minutes: number) => {
+    if (minutes < 60) {
+      return `${minutes}min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
   };
 
   // Group salons by owner
@@ -258,6 +299,9 @@ const AdminDashboard: React.FC = () => {
                   <div className="text-sm text-gray-600">
                     <span className="text-green-600">{stats.salons.active}</span> active,{' '}
                     <span className="text-blue-600">{stats.salons.booking_enabled}</span> with booking
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    <span className="text-purple-600">{stats.salons.total_services}</span> total services
                   </div>
                 </div>
               </div>
@@ -479,6 +523,19 @@ const AdminDashboard: React.FC = () => {
                             <p className="text-sm text-gray-500">
                               Owner: {owner.name} • {formatDate(salon.created_at)}
                             </p>
+                            <div className="flex items-center mt-1">
+                              <span className="text-sm text-gray-500">
+                                {salon.services_count} service{salon.services_count !== 1 ? 's' : ''}
+                              </span>
+                              {salon.services_count > 0 && (
+                                <button
+                                  onClick={() => toggleSalonExpansion(salon.id)}
+                                  className="ml-2 text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  {expandedSalons.has(salon.id) ? 'Hide services' : 'Show services'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -514,6 +571,43 @@ const AdminDashboard: React.FC = () => {
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Services Section */}
+                      {expandedSalons.has(salon.id) && salon.services.length > 0 && (
+                        <div className="mt-4 ml-14 border-t border-gray-200 pt-4">
+                          <h5 className="text-sm font-medium text-gray-900 mb-3">Services & Prices</h5>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {salon.services.map((service) => (
+                              <div key={service.id} className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h6 className="text-sm font-medium text-gray-900">{service.name}</h6>
+                                    {service.category && (
+                                      <p className="text-xs text-gray-500 mt-1">{service.category}</p>
+                                    )}
+                                    {service.description && (
+                                      <p className="text-xs text-gray-600 mt-1 line-clamp-2">{service.description}</p>
+                                    )}
+                                  </div>
+                                  {service.is_bio_diamond && (
+                                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                      BIO
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="text-sm font-semibold text-green-600">
+                                    {formatPrice(service.price)}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {formatDuration(service.duration)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -5,6 +5,7 @@ interface User {
   id: number;
   email: string;
   name: string;
+  customer_id?: string;
   token?: string;
   is_admin?: boolean;
 }
@@ -18,12 +19,14 @@ interface RegisterRequest {
   email: string;
   password: string;
   name: string;
+  customer_id: string;
 }
 
 interface AuthResponse {
   id: number;
   email: string;
   name: string;
+  customer_id?: string;
   token: string;
   is_admin?: boolean;
 }
@@ -201,8 +204,12 @@ export const salonAPI = {
   },
 
   // Get available time slots for a salon on a specific date
-  getAvailability: async (salonId: number, date: string): Promise<AvailabilityResponse> => {
-    const response = await api.get(`/salons/${salonId}/availability?date=${date}`);
+  getAvailability: async (salonId: number, date: string, serviceId?: number): Promise<AvailabilityResponse> => {
+    let url = `/salons/${salonId}/availability?date=${date}`;
+    if (serviceId) {
+      url += `&service_id=${serviceId}`;
+    }
+    const response = await api.get(url);
     return response.data;
   },
 };

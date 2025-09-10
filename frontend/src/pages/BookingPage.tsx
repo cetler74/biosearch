@@ -36,15 +36,37 @@ const BookingPage: React.FC = () => {
     enabled: salonIdNum > 0
   });
 
-  // Fetch available time slots based on selected date
+  // Fetch available time slots based on selected date and service
   const { data: availabilityData, isLoading: availabilityLoading } = useQuery({
-    queryKey: ['availability', salonIdNum, selectedDate],
-    queryFn: () => salonAPI.getAvailability(salonIdNum, selectedDate),
-    enabled: !!selectedDate && salonIdNum > 0
+    queryKey: ['availability', salonIdNum, selectedDate, selectedService],
+    queryFn: () => salonAPI.getAvailability(salonIdNum, selectedDate, selectedService || undefined),
+    enabled: !!selectedDate && salonIdNum > 0 && selectedService !== null
   });
 
   const timeSlots = availabilityData?.time_slots || [];
   const availableSlots = availabilityData?.available_slots || [];
+
+  // Function to check if a slot should be highlighted based on selected time and service duration
+  const isSlotHighlighted = (slotTime: string) => {
+    if (!selectedTime || !selectedService) return false;
+    
+    const selectedServiceData = salon?.services?.find(s => s.id === selectedService);
+    if (!selectedServiceData) return false;
+    
+    const duration = selectedServiceData.duration;
+    const selectedTimeMinutes = timeToMinutes(selectedTime);
+    const slotTimeMinutes = timeToMinutes(slotTime);
+    
+    // Check if this slot is within the service duration from the selected start time
+    return slotTimeMinutes >= selectedTimeMinutes && 
+           slotTimeMinutes < selectedTimeMinutes + duration;
+  };
+
+  // Helper function to convert time string to minutes
+  const timeToMinutes = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
 
   const createBookingMutation = useMutation({
     mutationFn: (bookingData: BookingRequest) => bookingAPI.createBooking(bookingData),
@@ -228,7 +250,7 @@ const BookingPage: React.FC = () => {
                         className={`py-2 px-3 text-sm font-medium rounded-lg border transition-colors ${
                           !slot.available
                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                            : selectedTime === slot.time
+                            : isSlotHighlighted(slot.time)
                             ? 'bg-blue-500 text-white border-blue-500'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                         }`}

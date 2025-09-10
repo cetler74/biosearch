@@ -18,7 +18,8 @@ const SalonEditForm: React.FC<SalonEditFormProps> = ({ salon, onClose, onSuccess
     cidade: '',
     rua: '',
     porta: '',
-    cod_postal: ''
+    cod_postal: '',
+    about: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +35,8 @@ const SalonEditForm: React.FC<SalonEditFormProps> = ({ salon, onClose, onSuccess
         cidade: salon.cidade || '',
         rua: salon.rua || '',
         porta: salon.porta || '',
-        cod_postal: salon.cod_postal || ''
+        cod_postal: salon.cod_postal || '',
+        about: salon.about || ''
       });
     }
   }, [salon]);
@@ -56,7 +58,7 @@ const SalonEditForm: React.FC<SalonEditFormProps> = ({ salon, onClose, onSuccess
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -202,6 +204,24 @@ const SalonEditForm: React.FC<SalonEditFormProps> = ({ salon, onClose, onSuccess
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+
+          {/* About Section */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              About
+            </label>
+            <textarea
+              name="about"
+              value={formData.about}
+              onChange={handleChange}
+              rows={4}
+              placeholder="Welcome to our salon! We specialize in professional nail care, beauty treatments, and exceptional customer service. Our experienced team is dedicated to providing you with the highest quality services in a relaxing and comfortable environment. We use only premium products and the latest techniques to ensure you leave feeling beautiful and refreshed. Book your appointment today and experience the difference!"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This text will be displayed on your salon's public page
+            </p>
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">

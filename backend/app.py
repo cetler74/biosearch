@@ -754,6 +754,7 @@ def get_manager_salons():
         'rua': salon.rua,
         'porta': salon.porta,
         'cod_postal': salon.cod_postal,
+        'about': salon.about,
         'estado': salon.estado,
         'booking_enabled': salon.booking_enabled,
         'is_bio_diamond': salon.is_bio_diamond,
@@ -765,6 +766,7 @@ def get_manager_salons():
 def create_salon():
     """Create a new salon for the current user"""
     data = request.get_json()
+    print(f"Received salon data: {data}")  # Debug log
     
     required_fields = ['nome', 'cidade', 'regiao', 'telefone', 'email']
     for field in required_fields:
@@ -782,6 +784,7 @@ def create_salon():
         porta=data.get('porta'),
         cod_postal=data.get('cod_postal'),
         pais=data.get('pais', 'Portugal'),
+        about=data.get('about'),
         estado='Ativo',
         owner_id=request.current_user.id
     )
@@ -1160,6 +1163,23 @@ def get_all_salons():
     salon_data = []
     for salon in salons.items:
         owner = salon.owner
+        
+        # Get salon services
+        salon_services = db.session.query(SalonService, Service).join(Service).filter(
+            SalonService.salon_id == salon.id
+        ).all()
+        
+        services = [{
+            'id': salon_service.id,
+            'service_id': service.id,
+            'name': service.name,
+            'category': service.category,
+            'description': service.description,
+            'is_bio_diamond': service.is_bio_diamond,
+            'price': salon_service.price,
+            'duration': salon_service.duration
+        } for salon_service, service in salon_services]
+        
         salon_data.append({
             'id': salon.id,
             'nome': salon.nome,
@@ -1177,6 +1197,8 @@ def get_all_salons():
                 'email': owner.email if owner else None,
                 'customer_id': owner.customer_id if owner else None
             } if owner else None,
+            'services': services,
+            'services_count': len(services),
             'created_at': salon.created_at.isoformat()
         })
     
@@ -1241,6 +1263,9 @@ def get_admin_stats():
     active_salons = Salon.query.filter_by(is_active=True).count()
     booking_enabled_salons = Salon.query.filter_by(booking_enabled=True, is_active=True).count()
     
+    # Count total services across all salons
+    total_services = SalonService.query.count()
+    
     total_bookings = Booking.query.count()
     recent_bookings = Booking.query.filter(
         Booking.created_at >= datetime.utcnow() - timedelta(days=7)
@@ -1255,7 +1280,8 @@ def get_admin_stats():
         'salons': {
             'total': total_salons,
             'active': active_salons,
-            'booking_enabled': booking_enabled_salons
+            'booking_enabled': booking_enabled_salons,
+            'total_services': total_services
         },
         'bookings': {
             'total': total_bookings,

@@ -6,6 +6,7 @@ interface RegisterRequest {
   email: string;
   password: string;
   name: string;
+  customer_id: string;
 }
 
 interface RegisterFormProps {
@@ -17,6 +18,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) => {
     name: '',
     email: '',
     password: '',
+    customer_id: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -31,7 +33,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) => {
     try {
       await register(formData);
     } catch (err: any) {
-      setError(err.message || 'Registration failed');
+      // Extract the error message from the backend response
+      const errorMessage = err.response?.data?.error || err.message || 'Registration failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -103,6 +107,28 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin }) => {
                   onChange={handleChange}
                   className="appearance-none rounded-md relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                   placeholder="Enter your email"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="customer_id" className="block text-sm font-medium text-gray-700">
+                Customer ID
+              </label>
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="customer_id"
+                  name="customer_id"
+                  type="text"
+                  autoComplete="off"
+                  required
+                  value={formData.customer_id}
+                  onChange={handleChange}
+                  className="appearance-none rounded-md relative block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="Enter your customer ID"
                 />
               </div>
             </div>

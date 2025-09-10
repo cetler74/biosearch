@@ -29,7 +29,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister }) => {
     try {
       await login(formData);
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      // Extract the error message from the backend response
+      const errorMessage = err.response?.data?.error || err.message || 'Login failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
