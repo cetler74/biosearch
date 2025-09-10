@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import StarRating from '../common/StarRating';
 import { X } from 'lucide-react';
+import api from '../../utils/api';
 
 interface ReviewFormProps {
   salonId: number;
@@ -46,17 +47,10 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ salonId, onClose, onReviewSubmi
     setError('');
 
     try {
-      const response = await fetch(`http://localhost:5001/api/salons/${salonId}/reviews`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const response = await api.post(`/salons/${salonId}/reviews`, formData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao enviar avaliação');
+      if (!response.data) {
+        throw new Error('Erro ao enviar avaliação');
       }
 
       // Reset form

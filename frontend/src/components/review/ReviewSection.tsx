@@ -3,6 +3,7 @@ import StarRating from '../common/StarRating';
 import ReviewCard from './ReviewCard';
 import ReviewForm from './ReviewForm';
 import { Plus, Star } from 'lucide-react';
+import api from '../../utils/api';
 
 interface Review {
   id: number;
@@ -33,15 +34,11 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ salonId, reviewSummary })
 
   const fetchReviews = async (page: number = 1) => {
     try {
-      const response = await fetch(
-        `http://localhost:5001/api/salons/${salonId}/reviews?page=${page}&per_page=5`
+      const response = await api.get(
+        `/salons/${salonId}/reviews?page=${page}&per_page=5`
       );
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch reviews');
-      }
-
-      const data = await response.json();
+      const data = response.data;
       
       if (page === 1) {
         setReviews(data.reviews);
