@@ -47,7 +47,7 @@ const SalonCard: React.FC<SalonCardProps> = ({ salon, showServices = false }) =>
   const hasBioServices = bioServices && bioServices.length > 0;
 
   return (
-    <div className="card hover:shadow-md transition-shadow duration-200">
+    <div className="salon-card">
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-2">

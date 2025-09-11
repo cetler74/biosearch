@@ -109,7 +109,7 @@ const HomePage: React.FC = () => {
       <section className="py-16 bg-white">
         <div className="max-w-4xl mx-auto container-padding text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Can't find a tech in your area?
+            Can't find a nail technician in your area?
           </h2>
           <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
             Try our Concierge Service - facilitating quick and simple bookings for Bio Sculpture manicures.

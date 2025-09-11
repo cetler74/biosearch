@@ -100,11 +100,11 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ salonId, reviewSummary })
         <div className="flex items-center gap-6">
           <div className="text-center">
             <div className="text-3xl font-bold text-gray-900">
-              {reviewSummary.average_rating.toFixed(1)}
+              {reviewSummary?.average_rating?.toFixed(1) || '0.0'}
             </div>
-            <StarRating rating={reviewSummary.average_rating} size="lg" />
+            <StarRating rating={reviewSummary?.average_rating || 0} size="lg" />
             <div className="text-sm text-gray-600 mt-1">
-              {reviewSummary.total_reviews} avaliações
+              {reviewSummary?.total_reviews || 0} avaliações
             </div>
           </div>
 

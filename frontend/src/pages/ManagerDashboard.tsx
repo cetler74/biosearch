@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Mail, Plus, Eye, LogOut, Settings, Trash2, Edit, Building } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Mail, Plus, Eye, LogOut, Settings, Trash2, Edit, Building, Camera } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { managerAPI, serviceAPI, salonAPI } from '../utils/api';
@@ -9,9 +9,10 @@ import SalonEditForm from '../components/manager/SalonEditForm';
 import OpeningHoursForm from '../components/manager/OpeningHoursForm';
 import OpeningHoursDisplay from '../components/manager/OpeningHoursDisplay';
 import BookingCalendar from '../components/manager/BookingCalendar';
+import SalonImageManager from '../components/manager/SalonImageManager';
 
 const ManagerDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'bookings' | 'salon' | 'salons' | 'salon-info' | 'opening-hours'>('salons');
+  const [activeTab, setActiveTab] = useState<'bookings' | 'salon' | 'salons' | 'salon-info' | 'opening-hours' | 'images'>('salons');
   const [selectedSalon, setSelectedSalon] = useState<any>(null);
   const [salons, setSalons] = useState<any[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -346,6 +347,17 @@ const ManagerDashboard: React.FC = () => {
                 >
                   <Clock className="h-5 w-5 inline mr-2" />
                   Opening Hours
+                </button>
+                <button
+                  onClick={() => setActiveTab('images')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'images'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Camera className="h-5 w-5 inline mr-2" />
+                  Images
                 </button>
               </nav>
             </div>
@@ -970,6 +982,29 @@ const ManagerDashboard: React.FC = () => {
             onEdit={() => setShowOpeningHoursForm(true)}
             refreshTrigger={openingHoursRefreshTrigger}
           />
+        )}
+
+        {/* Images Tab */}
+        {activeTab === 'images' && selectedSalon && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <SalonImageManager
+              salonId={selectedSalon.id}
+              salonName={selectedSalon.nome}
+              images={selectedSalon.images || []}
+              onImagesChange={(images) => {
+                // Update local state immediately for better UX
+                setSelectedSalon({ ...selectedSalon, images });
+                setSalons(salons.map(salon => 
+                  salon.id === selectedSalon.id 
+                    ? { ...salon, images } 
+                    : salon
+                ));
+                
+                // Refresh salon data from server to ensure consistency
+                loadSalons();
+              }}
+            />
+          </div>
         )}
 
         {/* Modals */}

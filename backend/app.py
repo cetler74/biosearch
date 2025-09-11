@@ -8,18 +8,29 @@ import pandas as pd
 import hashlib
 import secrets
 from functools import wraps
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+
+# CORS configuration
+cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174,http://localhost:3000,http://100.88.126.87:5173,http://100.88.126.87:5174,http://100.70.247.59:5173,http://100.70.247.59:5174').split(',')
+CORS(app, origins=cors_origins)
 
 # Database configuration
-# Use home directory to avoid permission issues with external drives
-import os
-home_dir = os.path.expanduser("~")
-db_path = os.path.join(home_dir, "biosearch.db")
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+database_url = os.getenv('DATABASE_URL')
+if database_url:
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Fallback to SQLite for development
+    home_dir = os.path.expanduser("~")
+    db_path = os.path.join(home_dir, "biosearch.db")
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your-secret-key-here'  # Change this in production
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 db = SQLAlchemy(app)
 
@@ -139,6 +150,21 @@ class Salon(db.Model):
     bookings = db.relationship('Booking', back_populates='salon', lazy='dynamic')
     time_slots = db.relationship('TimeSlot', back_populates='salon', lazy='dynamic')
     reviews = db.relationship('Review', back_populates='salon', lazy='dynamic')
+    images = db.relationship('SalonImage', back_populates='salon', lazy='dynamic', cascade='all, delete-orphan')
+
+class SalonImage(db.Model):
+    __tablename__ = 'salon_images'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    salon_id = db.Column(db.Integer, db.ForeignKey('salons.id'), nullable=False)
+    image_url = db.Column(db.String(500), nullable=False)
+    image_alt = db.Column(db.String(200))
+    is_primary = db.Column(db.Boolean, default=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    salon = db.relationship('Salon', back_populates='images')
 
 class Service(db.Model):
     __tablename__ = 'services'
@@ -358,6 +384,19 @@ def get_salons():
     for salon in salons.items:
         reviews = review_dict.get(salon.id, {'average_rating': 0, 'total_reviews': 0})
         
+        # Get salon images, sorted by primary first, then display_order
+        images = []
+        for image in salon.images.order_by(SalonImage.is_primary.desc(), SalonImage.display_order).all():
+            images.append({
+                'id': image.id,
+                'salon_id': image.salon_id,
+                'image_url': image.image_url,
+                'image_alt': image.image_alt,
+                'is_primary': image.is_primary,
+                'display_order': image.display_order,
+                'created_at': image.created_at.isoformat()
+            })
+        
         salon_data.append({
             'id': salon.id,
             'nome': salon.nome,
@@ -374,6 +413,7 @@ def get_salons():
             'booking_enabled': salon.booking_enabled,
             'is_bio_diamond': salon.is_bio_diamond,
             'about': salon.about,
+            'images': images,
             'reviews': reviews
         })
     
@@ -412,6 +452,19 @@ def get_salon(salon_id):
     avg_rating = round(float(review_summary.avg_rating or 0), 1)
     total_reviews = review_summary.total_reviews
     
+    # Get salon images, sorted by primary first, then display_order
+    images = []
+    for image in salon.images.order_by(SalonImage.is_primary.desc(), SalonImage.display_order).all():
+        images.append({
+            'id': image.id,
+            'salon_id': image.salon_id,
+            'image_url': image.image_url,
+            'image_alt': image.image_alt,
+            'is_primary': image.is_primary,
+            'display_order': image.display_order,
+            'created_at': image.created_at.isoformat()
+        })
+    
     return jsonify({
         'id': salon.id,
         'nome': salon.nome,
@@ -429,6 +482,7 @@ def get_salon(salon_id):
         'is_bio_diamond': salon.is_bio_diamond,
         'about': salon.about,
         'services': services,
+        'images': images,
         'reviews': {
             'average_rating': avg_rating,
             'total_reviews': total_reviews
@@ -743,23 +797,41 @@ def get_manager_salons():
     """Get all salons owned by the current user"""
     salons = Salon.query.filter_by(owner_id=request.current_user.id).all()
     
-    return jsonify([{
-        'id': salon.id,
-        'nome': salon.nome,
-        'cidade': salon.cidade,
-        'regiao': salon.regiao,
-        'telefone': salon.telefone,
-        'email': salon.email,
-        'website': salon.website,
-        'rua': salon.rua,
-        'porta': salon.porta,
-        'cod_postal': salon.cod_postal,
-        'about': salon.about,
-        'estado': salon.estado,
-        'booking_enabled': salon.booking_enabled,
-        'is_bio_diamond': salon.is_bio_diamond,
-        'created_at': salon.created_at.isoformat()
-    } for salon in salons])
+    result = []
+    for salon in salons:
+        # Get salon images, sorted by primary first, then display_order
+        images = []
+        for image in salon.images.order_by(SalonImage.is_primary.desc(), SalonImage.display_order).all():
+            images.append({
+                'id': image.id,
+                'salon_id': image.salon_id,
+                'image_url': image.image_url,
+                'image_alt': image.image_alt,
+                'is_primary': image.is_primary,
+                'display_order': image.display_order,
+                'created_at': image.created_at.isoformat()
+            })
+        
+        result.append({
+            'id': salon.id,
+            'nome': salon.nome,
+            'cidade': salon.cidade,
+            'regiao': salon.regiao,
+            'telefone': salon.telefone,
+            'email': salon.email,
+            'website': salon.website,
+            'rua': salon.rua,
+            'porta': salon.porta,
+            'cod_postal': salon.cod_postal,
+            'about': salon.about,
+            'estado': salon.estado,
+            'booking_enabled': salon.booking_enabled,
+            'is_bio_diamond': salon.is_bio_diamond,
+            'created_at': salon.created_at.isoformat(),
+            'images': images
+        })
+    
+    return jsonify(result)
 
 @app.route('/api/manager/salons', methods=['POST'])
 @require_auth
@@ -1288,6 +1360,128 @@ def get_admin_stats():
             'recent_week': recent_bookings
         }
     })
+
+# Image Management Endpoints
+@app.route('/api/salons/<int:salon_id>/images', methods=['GET'])
+def get_salon_images(salon_id):
+    """Get all images for a salon"""
+    salon = Salon.query.get_or_404(salon_id)
+    
+    images = []
+    for image in salon.images.order_by(SalonImage.is_primary.desc(), SalonImage.display_order).all():
+        images.append({
+            'id': image.id,
+            'salon_id': image.salon_id,
+            'image_url': image.image_url,
+            'image_alt': image.image_alt,
+            'is_primary': image.is_primary,
+            'display_order': image.display_order,
+            'created_at': image.created_at.isoformat()
+        })
+    
+    return jsonify({'images': images})
+
+@app.route('/api/salons/<int:salon_id>/images', methods=['POST'])
+@require_auth
+def add_salon_image(salon_id):
+    """Add a new image to a salon"""
+    salon = Salon.query.get_or_404(salon_id)
+    
+    # Check if user owns this salon or is admin
+    if not request.current_user.is_admin and salon.owner_id != request.current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    
+    if not data or not data.get('image_url'):
+        return jsonify({'error': 'image_url is required'}), 400
+    
+    # If this is the first image, make it primary
+    existing_images_count = salon.images.count()
+    is_primary = existing_images_count == 0 or data.get('is_primary', False)
+    
+    # If setting as primary, unset other primary images
+    if is_primary:
+        salon.images.filter_by(is_primary=True).update({'is_primary': False})
+    
+    image = SalonImage(
+        salon_id=salon_id,
+        image_url=data['image_url'],
+        image_alt=data.get('image_alt', ''),
+        is_primary=is_primary,
+        display_order=data.get('display_order', existing_images_count)
+    )
+    
+    db.session.add(image)
+    db.session.commit()
+    
+    return jsonify({
+        'id': image.id,
+        'salon_id': image.salon_id,
+        'image_url': image.image_url,
+        'image_alt': image.image_alt,
+        'is_primary': image.is_primary,
+        'display_order': image.display_order,
+        'created_at': image.created_at.isoformat()
+    }), 201
+
+@app.route('/api/salons/<int:salon_id>/images/<int:image_id>', methods=['PUT'])
+@require_auth
+def update_salon_image(salon_id, image_id):
+    """Update a salon image"""
+    salon = Salon.query.get_or_404(salon_id)
+    image = SalonImage.query.filter_by(id=image_id, salon_id=salon_id).first_or_404()
+    
+    # Check if user owns this salon or is admin
+    if not request.current_user.is_admin and salon.owner_id != request.current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    
+    if data.get('image_url'):
+        image.image_url = data['image_url']
+    if 'image_alt' in data:
+        image.image_alt = data['image_alt']
+    if 'display_order' in data:
+        image.display_order = data['display_order']
+    if 'is_primary' in data and data['is_primary']:
+        # Unset other primary images
+        salon.images.filter_by(is_primary=True).update({'is_primary': False})
+        image.is_primary = True
+    
+    db.session.commit()
+    
+    return jsonify({
+        'id': image.id,
+        'salon_id': image.salon_id,
+        'image_url': image.image_url,
+        'image_alt': image.image_alt,
+        'is_primary': image.is_primary,
+        'display_order': image.display_order,
+        'created_at': image.created_at.isoformat()
+    })
+
+@app.route('/api/salons/<int:salon_id>/images/<int:image_id>', methods=['DELETE'])
+@require_auth
+def delete_salon_image(salon_id, image_id):
+    """Delete a salon image"""
+    salon = Salon.query.get_or_404(salon_id)
+    image = SalonImage.query.filter_by(id=image_id, salon_id=salon_id).first_or_404()
+    
+    # Check if user owns this salon or is admin
+    if not request.current_user.is_admin and salon.owner_id != request.current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # If deleting primary image, make the next image primary
+    if image.is_primary:
+        next_image = salon.images.filter(SalonImage.id != image_id).order_by(SalonImage.display_order).first()
+        if next_image:
+            next_image.is_primary = True
+    
+    db.session.delete(image)
+    db.session.commit()
+    
+    return jsonify({'message': 'Image deleted successfully'})
 
 # Health check endpoint
 @app.route('/api/health', methods=['GET'])

@@ -1,3 +1,13 @@
+export interface SalonImage {
+  id: number;
+  salon_id: number;
+  image_url: string;
+  image_alt?: string;
+  is_primary: boolean;
+  display_order: number;
+  created_at: string;
+}
+
 export interface Salon {
   id: number;
   nome: string;
@@ -15,6 +25,7 @@ export interface Salon {
   is_bio_diamond?: boolean;
   about?: string;
   services?: SalonService[];
+  images?: SalonImage[];
   reviews?: {
     average_rating: number;
     total_reviews: number;

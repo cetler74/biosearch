@@ -32,6 +32,16 @@ interface AuthResponse {
 }
 
 // Temporary inline types to avoid import issues
+interface SalonImage {
+  id: number;
+  salon_id: number;
+  image_url: string;
+  image_alt?: string;
+  is_primary: boolean;
+  display_order: number;
+  created_at: string;
+}
+
 interface Salon {
   id: number;
   nome: string;
@@ -46,6 +56,7 @@ interface Salon {
   latitude?: number;
   longitude?: number;
   services?: SalonService[];
+  images?: SalonImage[];
   reviews?: {
     average_rating: number;
     total_reviews: number;
@@ -463,6 +474,43 @@ export const adminAPI = {
   // Get admin dashboard statistics
   getStats: async (): Promise<AdminStats> => {
     const response = await api.get('/admin/stats');
+    return response.data;
+  },
+};
+
+// Image Management API
+export const imageAPI = {
+  // Get all images for a salon
+  getSalonImages: async (salonId: number): Promise<{ images: SalonImage[] }> => {
+    const response = await api.get(`/salons/${salonId}/images`);
+    return response.data;
+  },
+
+  // Add a new image to a salon
+  addSalonImage: async (salonId: number, imageData: {
+    image_url: string;
+    image_alt?: string;
+    is_primary?: boolean;
+    display_order?: number;
+  }): Promise<SalonImage> => {
+    const response = await api.post(`/salons/${salonId}/images`, imageData);
+    return response.data;
+  },
+
+  // Update a salon image
+  updateSalonImage: async (salonId: number, imageId: number, imageData: {
+    image_url?: string;
+    image_alt?: string;
+    is_primary?: boolean;
+    display_order?: number;
+  }): Promise<SalonImage> => {
+    const response = await api.put(`/salons/${salonId}/images/${imageId}`, imageData);
+    return response.data;
+  },
+
+  // Delete a salon image
+  deleteSalonImage: async (salonId: number, imageId: number): Promise<{ message: string }> => {
+    const response = await api.delete(`/salons/${salonId}/images/${imageId}`);
     return response.data;
   },
 };

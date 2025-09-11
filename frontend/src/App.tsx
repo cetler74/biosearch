@@ -5,13 +5,16 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import HomePage from './pages/HomePage';
-import SearchResults from './pages/SearchResults';
-import SalonDetails from './pages/SalonDetails';
+import SearchResultsWithImages from './pages/SearchResultsWithImages';
+import SalonDetailsWithImages from './pages/SalonDetailsWithImages';
 import BookingPage from './pages/BookingPage';
 import BioDiamondPage from './pages/BioDiamondPage';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AuthPage from './components/auth/AuthPage';
+import ImageTest from './components/test/ImageTest';
+import APITest from './components/test/APITest';
+import ImageDebugTest from './components/test/ImageDebugTest';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -91,8 +94,8 @@ function App() {
             <main className="flex-1">
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/search" element={<SearchResults />} />
-                <Route path="/salon/:id" element={<SalonDetails />} />
+                <Route path="/search" element={<SearchResultsWithImages />} />
+                <Route path="/salon/:id" element={<SalonDetailsWithImages />} />
                 <Route path="/book/:salonId" element={<BookingPage />} />
                 <Route path="/bio-diamond" element={<BioDiamondPage />} />
                 <Route path="/manager" element={
@@ -106,6 +109,9 @@ function App() {
                   </AdminProtectedRoute>
                 } />
                 <Route path="/login" element={<AuthPage />} />
+                <Route path="/test-images" element={<ImageTest />} />
+                <Route path="/test-api" element={<APITest />} />
+                <Route path="/test-image-debug" element={<ImageDebugTest />} />
                 {/* Add more routes as needed */}
                 <Route path="*" element={
                   <div className="flex-1 flex items-center justify-center py-20">

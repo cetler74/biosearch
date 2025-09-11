@@ -19,6 +19,9 @@ export default {
       },
       fontFamily: {
         'sans': ['Inter', 'ui-sans-serif', 'system-ui'],
+      },
+      scale: {
+        '110': '1.1',
       }
     },
   },
